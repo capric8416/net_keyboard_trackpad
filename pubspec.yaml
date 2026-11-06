@@ -1,0 +1,16 @@
+name: net_keyboard_trackpad_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+workspace:
+  - packages/remote_input_core
+  - packages/remote_input_protocol
+  - packages/desktop_input_windows
+  - apps/mobile_app
+  - apps/desktop_app
+
+dev_dependencies:
+  lints: ^6.0.0
+

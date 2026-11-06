@@ -1,0 +1,14 @@
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.idea/
+.metadata
+.pub-cache/
+.uv-cache/
+.venv/
+__pycache__/
+build/
+.native-build/
+coverage/
+*.iml
+

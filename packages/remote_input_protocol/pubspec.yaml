@@ -1,0 +1,18 @@
+name: remote_input_protocol
+description: Versioned protobuf and gRPC contract for net_keyboard_trackpad.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  fixnum: ^1.1.1
+  grpc: ^5.2.0
+  protobuf: ^6.1.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  protoc_plugin: ^25.1.0
+

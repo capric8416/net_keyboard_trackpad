@@ -1,0 +1,101 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:desktop_input_windows/desktop_input_windows.dart';
+import 'package:flutter/foundation.dart';
+import 'package:grpc/grpc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../security/server_identity.dart';
+import '../security/totp.dart';
+import '../server/remote_input_service.dart';
+
+final class DesktopController extends ChangeNotifier {
+  ServerIdentity? _identity;
+  Server? _server;
+  Timer? _codeTimer;
+  int _port = 39091;
+  String _status = '正在初始化安全身份…';
+  String? _connectedDevice;
+  Object? _error;
+  List<NetworkInterface> _interfaces = const [];
+
+  int get port => _port;
+  String get status => _status;
+  String? get connectedDevice => _connectedDevice;
+  Object? get error => _error;
+  bool get isListening => _server != null;
+  String get fingerprint => _identity?.certificateFingerprint ?? '生成中…';
+  String get pairingCode =>
+      _identity == null ? '------' : totpCode(_identity!.totpSecret);
+  List<String> get addresses => [
+    for (final interface in _interfaces)
+      for (final address in interface.addresses)
+        if (address.type == InternetAddressType.IPv4 && !address.isLoopback)
+          '${address.address}:$_port',
+  ];
+
+  Future<void> initialize() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      _port = preferences.getInt('listen_port') ?? 39091;
+      _interfaces = await NetworkInterface.list(
+        includeLoopback: false,
+        type: InternetAddressType.IPv4,
+      );
+      final store = ServerIdentityStore();
+      _identity = await store.loadOrCreate();
+      final service = RemoteInputService(
+        identity: _identity!,
+        identityStore: store,
+        input: WindowsInputInjector(),
+        onConnectionChanged: (connected, peerAddress) {
+          _connectedDevice = connected ? peerAddress : null;
+          _status = connected ? '已连接：$peerAddress' : '等待连接';
+          notifyListeners();
+        },
+      );
+      final server = Server.create(services: [service]);
+      await server.serve(
+        address: InternetAddress.anyIPv4,
+        port: _port,
+        security: ServerTlsCredentials(
+          certificate: utf8.encode(_identity!.certificatePem),
+          privateKey: utf8.encode(_identity!.privateKeyPem),
+        ),
+      );
+      _server = server;
+      _status = '等待连接';
+      _codeTimer = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => notifyListeners(),
+      );
+    } on SocketException catch (error) {
+      if (error.osError?.errorCode == 10048) {
+        _error = '端口 $_port 已被占用。请检查是否已有接收端在系统托盘运行，'
+            '或是否有其他程序正在使用该端口。';
+        _status = '端口已被占用';
+      } else {
+        _error = error;
+        _status = '监听启动失败';
+      }
+    } on Object catch (error) {
+      _error = error;
+      _status = '监听启动失败';
+    }
+    notifyListeners();
+  }
+
+  Future<void> shutdown() async {
+    _codeTimer?.cancel();
+    await _server?.shutdown();
+    _server = null;
+  }
+
+  @override
+  void dispose() {
+    _codeTimer?.cancel();
+    super.dispose();
+  }
+}

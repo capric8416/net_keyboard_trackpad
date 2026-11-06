@@ -1,0 +1,10 @@
+[project]
+name = "net-keyboard-trackpad-tools"
+version = "0.1.0"
+description = "Cross-platform development tools for net_keyboard_trackpad"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv]
+package = false
+

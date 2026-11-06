@@ -1,0 +1,262 @@
+syntax = "proto3";
+
+package netkeyboard.v1;
+
+service RemoteInputService {
+  rpc GetServerInfo(ServerInfoRequest) returns (ServerInfoResponse);
+  rpc CreatePairingChallenge(PairingChallengeRequest)
+      returns (PairingChallengeResponse);
+  rpc Pair(PairRequest) returns (PairResponse);
+  rpc Control(stream ClientEnvelope) returns (stream ServerEnvelope);
+}
+
+message ProtocolVersion {
+  uint32 major = 1;
+  uint32 minor = 2;
+}
+
+message ServerInfoRequest {}
+
+message ServerInfoResponse {
+  string server_id = 1;
+  string display_name = 2;
+  ProtocolVersion protocol_version = 3;
+  string certificate_sha256 = 4;
+  repeated Capability capabilities = 5;
+  bool pairing_enabled = 6;
+}
+
+message PairingChallengeRequest {
+  string client_instance_id = 1;
+}
+
+message PairingChallengeResponse {
+  string challenge_id = 1;
+  bytes server_nonce = 2;
+  int64 expires_at_unix_ms = 3;
+}
+
+message PairRequest {
+  string challenge_id = 1;
+  string client_instance_id = 2;
+  string client_name = 3;
+  string totp_code = 4;
+  bytes client_nonce = 5;
+  ProtocolVersion protocol_version = 6;
+}
+
+message PairResponse {
+  string paired_device_id = 1;
+  bytes bearer_token = 2;
+  string server_id = 3;
+  ProtocolVersion protocol_version = 4;
+  repeated Capability capabilities = 5;
+  int64 token_created_at_unix_ms = 6;
+}
+
+message ClientEnvelope {
+  uint64 sequence = 1;
+  string event_id = 2;
+
+  oneof payload {
+    ClientHello hello = 10;
+    KeyStroke key_stroke = 11;
+    TextInput text_input = 12;
+    Ping ping = 13;
+    PointerInput pointer_input = 14;
+  }
+}
+
+message ServerEnvelope {
+  uint64 acknowledged_sequence = 1;
+
+  oneof payload {
+    ServerHello hello = 10;
+    CommandResult result = 11;
+    Pong pong = 12;
+    SessionClosing closing = 13;
+  }
+}
+
+message ClientHello {
+  string client_instance_id = 1;
+  string client_name = 2;
+  ProtocolVersion protocol_version = 3;
+  repeated Capability capabilities = 4;
+}
+
+message ServerHello {
+  string server_id = 1;
+  string display_name = 2;
+  ProtocolVersion protocol_version = 3;
+  repeated Capability capabilities = 4;
+  uint32 heartbeat_interval_seconds = 5;
+}
+
+message KeyStroke {
+  SemanticKey key = 1;
+  uint32 modifier_bits = 2;
+  bool repeated = 3;
+}
+
+message TextInput {
+  string text = 1;
+}
+
+message PointerInput {
+  sint32 delta_x = 1;
+  sint32 delta_y = 2;
+  sint32 wheel_delta = 3;
+  PointerButton button = 4;
+  bool button_down = 5;
+  SystemGesture gesture = 6;
+  sint32 horizontal_wheel_delta = 7;
+}
+
+enum PointerButton {
+  POINTER_BUTTON_NONE = 0;
+  POINTER_BUTTON_LEFT = 1;
+  POINTER_BUTTON_RIGHT = 2;
+  POINTER_BUTTON_MIDDLE = 3;
+}
+
+enum SystemGesture {
+  SYSTEM_GESTURE_NONE = 0;
+  SYSTEM_GESTURE_ZOOM_IN = 1;
+  SYSTEM_GESTURE_ZOOM_OUT = 2;
+  SYSTEM_GESTURE_TASK_VIEW = 3;
+  SYSTEM_GESTURE_SHOW_DESKTOP = 4;
+  SYSTEM_GESTURE_SWITCH_APP_NEXT = 5;
+  SYSTEM_GESTURE_SWITCH_APP_PREVIOUS = 6;
+}
+
+message Ping {
+  int64 sent_at_unix_ms = 1;
+}
+
+message Pong {
+  int64 client_sent_at_unix_ms = 1;
+  int64 server_sent_at_unix_ms = 2;
+}
+
+message SessionClosing {
+  ErrorCode reason = 1;
+  string message = 2;
+}
+
+message CommandResult {
+  string event_id = 1;
+  bool success = 2;
+  ErrorCode error_code = 3;
+  string message = 4;
+  uint32 injected_event_count = 5;
+}
+
+enum Capability {
+  CAPABILITY_UNSPECIFIED = 0;
+  CAPABILITY_KEY_STROKE = 1;
+  CAPABILITY_UNICODE_TEXT = 2;
+  CAPABILITY_POINTER = 3;
+}
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_OK = 1;
+  ERROR_CODE_UNAUTHENTICATED = 2;
+  ERROR_CODE_PAIRING_DISABLED = 3;
+  ERROR_CODE_PAIRING_EXPIRED = 4;
+  ERROR_CODE_INVALID_TOTP = 5;
+  ERROR_CODE_RATE_LIMITED = 6;
+  ERROR_CODE_CERTIFICATE_CHANGED = 7;
+  ERROR_CODE_INCOMPATIBLE_PROTOCOL = 8;
+  ERROR_CODE_CONTROLLER_BUSY = 9;
+  ERROR_CODE_INVALID_SEQUENCE = 10;
+  ERROR_CODE_DUPLICATE_EVENT = 11;
+  ERROR_CODE_UNSUPPORTED_KEY = 12;
+  ERROR_CODE_INVALID_TEXT = 13;
+  ERROR_CODE_NO_FOREGROUND_TARGET = 14;
+  ERROR_CODE_INPUT_BLOCKED = 15;
+  ERROR_CODE_INPUT_PARTIAL = 16;
+  ERROR_CODE_INTERNAL = 17;
+}
+
+enum SemanticKey {
+  SEMANTIC_KEY_UNSPECIFIED = 0;
+  SEMANTIC_KEY_ESCAPE = 1;
+  SEMANTIC_KEY_F1 = 2;
+  SEMANTIC_KEY_F2 = 3;
+  SEMANTIC_KEY_F3 = 4;
+  SEMANTIC_KEY_F4 = 5;
+  SEMANTIC_KEY_F5 = 6;
+  SEMANTIC_KEY_F6 = 7;
+  SEMANTIC_KEY_F7 = 8;
+  SEMANTIC_KEY_F8 = 9;
+  SEMANTIC_KEY_F9 = 10;
+  SEMANTIC_KEY_F10 = 11;
+  SEMANTIC_KEY_F11 = 12;
+  SEMANTIC_KEY_F12 = 13;
+  SEMANTIC_KEY_PRINT_SCREEN = 14;
+  SEMANTIC_KEY_DELETE = 15;
+  SEMANTIC_KEY_HOME = 16;
+  SEMANTIC_KEY_BACKQUOTE = 17;
+  SEMANTIC_KEY_DIGIT_1 = 18;
+  SEMANTIC_KEY_DIGIT_2 = 19;
+  SEMANTIC_KEY_DIGIT_3 = 20;
+  SEMANTIC_KEY_DIGIT_4 = 21;
+  SEMANTIC_KEY_DIGIT_5 = 22;
+  SEMANTIC_KEY_DIGIT_6 = 23;
+  SEMANTIC_KEY_DIGIT_7 = 24;
+  SEMANTIC_KEY_DIGIT_8 = 25;
+  SEMANTIC_KEY_DIGIT_9 = 26;
+  SEMANTIC_KEY_DIGIT_0 = 27;
+  SEMANTIC_KEY_MINUS = 28;
+  SEMANTIC_KEY_EQUAL = 29;
+  SEMANTIC_KEY_BACKSPACE = 30;
+  SEMANTIC_KEY_PAGE_UP = 31;
+  SEMANTIC_KEY_TAB = 32;
+  SEMANTIC_KEY_KEY_Q = 33;
+  SEMANTIC_KEY_KEY_W = 34;
+  SEMANTIC_KEY_KEY_E = 35;
+  SEMANTIC_KEY_KEY_R = 36;
+  SEMANTIC_KEY_KEY_T = 37;
+  SEMANTIC_KEY_KEY_Y = 38;
+  SEMANTIC_KEY_KEY_U = 39;
+  SEMANTIC_KEY_KEY_I = 40;
+  SEMANTIC_KEY_KEY_O = 41;
+  SEMANTIC_KEY_KEY_P = 42;
+  SEMANTIC_KEY_BRACKET_LEFT = 43;
+  SEMANTIC_KEY_BRACKET_RIGHT = 44;
+  SEMANTIC_KEY_BACKSLASH = 45;
+  SEMANTIC_KEY_PAGE_DOWN = 46;
+  SEMANTIC_KEY_CAPS_LOCK = 47;
+  SEMANTIC_KEY_KEY_A = 48;
+  SEMANTIC_KEY_KEY_S = 49;
+  SEMANTIC_KEY_KEY_D = 50;
+  SEMANTIC_KEY_KEY_F = 51;
+  SEMANTIC_KEY_KEY_G = 52;
+  SEMANTIC_KEY_KEY_H = 53;
+  SEMANTIC_KEY_KEY_J = 54;
+  SEMANTIC_KEY_KEY_K = 55;
+  SEMANTIC_KEY_KEY_L = 56;
+  SEMANTIC_KEY_SEMICOLON = 57;
+  SEMANTIC_KEY_QUOTE = 58;
+  SEMANTIC_KEY_ENTER = 59;
+  SEMANTIC_KEY_KEY_Z = 60;
+  SEMANTIC_KEY_KEY_X = 61;
+  SEMANTIC_KEY_KEY_C = 62;
+  SEMANTIC_KEY_KEY_V = 63;
+  SEMANTIC_KEY_KEY_B = 64;
+  SEMANTIC_KEY_KEY_N = 65;
+  SEMANTIC_KEY_KEY_M = 66;
+  SEMANTIC_KEY_COMMA = 67;
+  SEMANTIC_KEY_PERIOD = 68;
+  SEMANTIC_KEY_SLASH = 69;
+  SEMANTIC_KEY_ARROW_UP = 70;
+  SEMANTIC_KEY_END = 71;
+  SEMANTIC_KEY_SPACE = 72;
+  SEMANTIC_KEY_MENU = 73;
+  SEMANTIC_KEY_ARROW_LEFT = 74;
+  SEMANTIC_KEY_ARROW_DOWN = 75;
+  SEMANTIC_KEY_ARROW_RIGHT = 76;
+}
+

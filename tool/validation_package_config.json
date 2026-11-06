@@ -1,0 +1,18 @@
+{
+  "configVersion": 2,
+  "packages": [
+    {
+      "name": "remote_input_core",
+      "rootUri": "../packages/remote_input_core",
+      "packageUri": "lib/",
+      "languageVersion": "3.12"
+    },
+    {
+      "name": "desktop_input_windows",
+      "rootUri": "../packages/desktop_input_windows",
+      "packageUri": "lib/",
+      "languageVersion": "3.12"
+    }
+  ]
+}
+

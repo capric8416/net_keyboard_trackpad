@@ -1,0 +1,397 @@
+# Net Keyboard Trackpad
+
+局域网远程输入工具：Android 端提供 64 键触控键盘、Fn 功能层和本地 FunASR 语音输入，Windows 端作为托盘后台应用接收 gRPC 命令并向当前激活窗口注入按键或文本。
+
+产品范围、协议、安全约束和完整任务列表见 [`plan.md`](plan.md)。当前代码包含 TLS gRPC、TOTP 首次配对、控制会话、Windows `SendInput`、84 键键盘、右侧多点触控板、托盘后台运行、FunASR 录音/FFI 和语音结果确认流程。
+
+## 仓库结构
+
+```text
+apps/
+├─ mobile_app/                 Android Flutter 客户端
+└─ desktop_app/                Windows Flutter 接收端
+packages/
+├─ remote_input_core/          平台无关的键码、84 键布局和状态模型
+├─ remote_input_protocol/      Protocol Buffers/gRPC 契约
+└─ desktop_input_windows/      Windows scan code 映射
+scripts/                       uv 执行的跨平台 Python 工具
+tool/                          工具版本与无依赖验证入口
+```
+
+仓库自动化统一使用 Python，通过 uv 运行。项目不维护 `.sh`、`.ps1`、`.bat` 或 `.cmd` 脚本。
+
+## 开发环境
+
+已验证的首轮工具版本记录在 [`tool/versions.md`](tool/versions.md)：
+
+| 工具 | 版本 | 用途 |
+| --- | --- | --- |
+| Flutter | 3.44.0 stable | 两端 Flutter 应用 |
+| Dart | 3.12.1 | Dart workspace、代码生成插件 |
+| Python | 3.12.11 | 跨平台仓库工具 |
+| uv | 0.13.6 | Python 环境和锁文件 |
+| protoc | 31.1 | protobuf 编译器 |
+| protoc_plugin | 25.1.0 | 生成 Dart protobuf/gRPC 代码 |
+| Android NDK | 29.0.14206865 | FunASR/ONNX Runtime 与 Android JNI 链接 |
+| CMake | 4.1.2 | Windows runner 和 Android 原生库 |
+
+工具小版本可以更新，但 Flutter、Dart、protobuf runtime 和 protoc plugin 必须保持相互兼容。升级后应同步修改版本文档、锁文件并重新生成协议代码。
+
+### 通用必备工具
+
+安装并加入 `PATH`：
+
+1. Git。
+2. Flutter stable SDK；Flutter 自带对应的 Dart SDK。
+3. Python 3.12。
+4. uv。
+5. protoc。
+
+执行以下命令确认终端能够找到工具：
+
+```text
+git --version
+flutter --version
+dart --version
+python --version
+uv --version
+protoc --version
+```
+
+### Android 构建环境
+
+安装 Android Studio，并在 SDK Manager 中安装：
+
+- Android SDK Platform；
+- Android SDK Build-Tools；
+- Android SDK Command-line Tools；
+- Android SDK Platform-Tools；
+- Android NDK (Side by side) 29.0.14206865；
+- CMake 4.1.2。
+
+配置 Flutter 能找到 Android SDK，然后接受 Android licenses：
+
+```text
+flutter config --android-sdk <android-sdk-directory>
+flutter doctor --android-licenses
+```
+
+必须至少连接一台 arm64 Android 真机验证 FunASR。模拟器可用于普通 UI 开发，但只有在提供相应 ABI 的原生 FunASR 库后才能运行语音识别。
+
+### Windows 构建环境
+
+Windows 桌面端必须在 Windows 上编译。安装 Visual Studio 2022，并选择工作负载 `Desktop development with C++`，同时确保包含：
+
+- MSVC C++ x64/x86 build tools；
+- Windows 10 或 Windows 11 SDK；
+- C++ CMake tools for Windows。
+
+安装后执行：
+
+```text
+flutter doctor -v
+```
+
+`Windows toolchain` 必须显示可用，才能编译桌面端。
+
+## 首次初始化
+
+以下命令都从仓库根目录执行。
+
+### 1. 初始化 Python 工具环境
+
+```text
+uv sync --frozen
+```
+
+uv 会按照 `pyproject.toml` 和 `uv.lock` 创建项目虚拟环境。当前 Python 工具没有第三方运行时依赖，但仍统一通过 uv 执行，以便后续安全地增加依赖。
+
+### 2. 初始化 Flutter、协议和依赖
+
+```text
+uv run python scripts/bootstrap.py
+```
+
+该命令会依次：
+
+1. 检查 `flutter`、`dart`、`uv` 和 `protoc`；
+2. 启用 Flutter Android 与 Windows desktop target；
+3. 为缺失的平台生成 `apps/mobile_app/android` 和 `apps/desktop_app/windows` runner；
+4. 安装固定版本的 `protoc_plugin`；
+5. 在 workspace 根目录执行 `flutter pub get`；
+6. 从 `remote_input.proto` 生成 Dart protobuf/gRPC 源码；
+7. 执行 `flutter doctor -v`。
+
+生成 runner 时脚本会保留两个 app 已有的 `pubspec.yaml`。如果 runner 已存在，脚本不会重复生成。
+
+CI 或已经确认 toolchain 正常的机器可跳过 doctor：
+
+```text
+uv run python scripts/bootstrap.py --skip-doctor
+```
+
+只安装依赖和生成协议、不创建 runner：
+
+```text
+uv run python scripts/bootstrap.py --skip-runners --skip-doctor
+```
+
+### 3. 单独重新生成 gRPC 代码
+
+修改 [`remote_input.proto`](packages/remote_input_protocol/proto/remote_input.proto) 后执行：
+
+```text
+uv run python scripts/generate_proto.py
+```
+
+生成文件位于：
+
+```text
+packages/remote_input_protocol/lib/src/generated/
+```
+
+需要重新生成并提交以下文件：
+
+- `remote_input.pb.dart`
+- `remote_input.pbenum.dart`
+- `remote_input.pbgrpc.dart`
+- `remote_input.pbjson.dart`
+
+协议字段号和枚举值发布后不得修改或复用；新增字段必须使用新编号。
+
+## 编译 Android 客户端
+
+首次编译前必须先完成“首次初始化”。
+
+### Release APK
+
+```text
+uv run python scripts/build.py android --mode release --android-format apk
+```
+
+产物：
+
+```text
+apps/mobile_app/build/app/outputs/flutter-apk/app-release.apk
+```
+
+### Release Android App Bundle
+
+```text
+uv run python scripts/build.py android --mode release --android-format appbundle
+```
+
+产物：
+
+```text
+apps/mobile_app/build/app/outputs/bundle/release/app-release.aab
+```
+
+### Debug APK
+
+```text
+uv run python scripts/build.py android --mode debug --android-format apk
+```
+
+Debug 产物位于 `apps/mobile_app/build/app/outputs/flutter-apk/`。
+
+正式发布前需要在 `apps/mobile_app/android` 配置独立的 release keystore。密钥、密码和签名配置不得提交到仓库。
+
+## 编译 Windows 接收端
+
+Windows 端必须在装有 Visual Studio C++ toolchain 的 Windows 环境中构建：
+
+```text
+uv run python scripts/build.py windows --mode release
+```
+
+Release 目录：
+
+```text
+apps/desktop_app/build/windows/x64/runner/Release/
+```
+
+交付时必须分发整个 `Release` 目录，不能只复制 `.exe`，因为 Flutter runtime、插件 DLL 和数据目录都是运行时依赖。
+
+Debug 构建：
+
+```text
+uv run python scripts/build.py windows --mode debug
+```
+
+Debug 目录通常位于：
+
+```text
+apps/desktop_app/build/windows/x64/runner/Debug/
+```
+
+## 同时编译两端
+
+在 Windows 上安装好 Android 和 Windows 两套 toolchain 后可以执行：
+
+```text
+uv run python scripts/build.py all --mode release --android-format apk
+```
+
+`build.py` 默认先执行 `flutter pub get` 和 protobuf 生成，再编译目标。依赖和协议代码已经确认没有变化时可以减少重复工作：
+
+```text
+uv run python scripts/build.py all --mode release --skip-pub-get
+```
+
+`--skip-pub-get` 会同时向 Flutter 传递 `--no-pub`。Android 当前只支持 arm64，构建脚本固定传递 `--target-platform android-arm64`，避免生成不可运行的其他 ABI 产物。需要查看 Flutter 和 Gradle 的具体进度时增加 `--verbose`。
+
+## 本地调试运行
+
+先查看 Flutter 可用设备：
+
+```text
+flutter devices
+```
+
+Android：
+
+```text
+cd apps/mobile_app
+flutter run -d <android-device-id>
+```
+
+Windows：
+
+```text
+cd apps/desktop_app
+flutter run -d windows
+```
+
+移动端和桌面端都在调试运行时，Windows 防火墙可能询问是否允许入站连接。开发阶段只允许专用网络。Android 连接的主机地址应使用 Windows 的局域网 IP，不能使用 Android 设备自身的 `127.0.0.1`。
+
+## 首次配对与使用
+
+1. 启动 Windows 端，从托盘打开状态窗口。
+   Windows 接收端只允许运行一个实例；再次启动会直接唤醒已有的托盘窗口。
+2. 记录 Windows 状态页中的局域网地址、TLS SHA-256 指纹和当前 6 位安全码。
+3. Android 填入地址、端口、指纹和验证码。Android 会先固定证书指纹，再通过 TLS 发送 TOTP。
+4. 配对成功后长期随机令牌保存到两端系统安全存储，后续启动会自动建立控制流。
+5. Android 键盘页点击“设备”可查看全部已保存的 Windows 接收端，并可切换连接、主动断开、删除或添加设备；主动断开不会自动重连。
+6. 左侧键盘发送普通键和保持选中的组合键；右侧触控板支持单指光标/左键、双指右键和滚动、捏合缩放、三指任务视图/桌面/切换应用。
+6. 长按语音按钮录音，松开后由本地 FunASR 识别；结果只在点击“确认输入”后注入 Windows 当前激活窗口。
+
+移动端切换网络后，旧控制流如果没有立即收到 TCP 断开通知，接收端会在 35 秒内因心跳超时主动释放旧会话，之后移动端可自动重连。
+
+## 检查与测试
+
+安装依赖后执行静态检查和测试：
+
+```text
+flutter analyze
+flutter test packages/remote_input_core
+flutter test packages/desktop_input_windows
+```
+
+不依赖 pub.dev 包的核心校验可以直接执行：
+
+```text
+dart tool/validate_core.dart
+dart --packages=tool/validation_package_config.json tool/validate_windows_mapping.dart
+```
+
+预期输出分别包含：
+
+```text
+remote_input_core validation passed: 64 unique keys
+Windows mapping validation passed: 76 keys, 8 modifiers
+```
+
+Python 工具语法检查：
+
+```text
+uv run python -m compileall -q scripts
+```
+
+## FunASR 模型与原生库
+
+FunASR 接入参考 `D:\sources\zh-lang-textbook\app` 的 Android C ABI、后台 isolate 和模型提取方式。首次构建 Android 前准备模型和 arm64 原生静态库：
+
+```text
+uv run python scripts/prepare_funasr.py --build-native
+```
+
+默认参考仓库为 `D:\sources\zh-lang-textbook`；其他位置可使用：
+
+```text
+uv run python scripts/prepare_funasr.py --reference <zh-lang-textbook-root> --build-native
+```
+
+脚本会固定 FunASR 与 ONNX Runtime commit，复制 Paraformer/VAD 模型并生成 SHA-256 manifest。原生构建和 Flutter Android 工程统一使用 NDK 29.0.14206865，避免 C++ ABI 或工具链不一致。原生构建由本仓库的 Python 工具完成，只读取参考仓库已有的源码缓存，不在参考仓库写入文件，也不调用 `.sh`、`.bat`、`.cmd` 或 `.ps1`。产物写入 `native/asr/vendor/android-arm64-v8a/`。缺少原生产物时 Android 构建会直接失败，避免生成语音功能不可用的 APK。
+
+首次原生构建需要编译 ONNX Runtime、RE2 和 FunASR，耗时较长。中间产物保存在 `.native-build/`，再次运行会复用已经完成的原生构建。准备脚本会把 ONNX、Protobuf、Abseil 等传递依赖一起合并，并使用 `--no-undefined` 实际链接 JNI 桥接库；链接校验失败时不会把原生包标记为可用。完成后再构建 APK：
+
+```text
+uv run python scripts/build.py --mode release android --android-format apk
+```
+
+模型准备流程由 `scripts/` 中的 Python 工具实现，并通过 uv 运行。模型工具会：
+
+- 固定上游版本或 commit；
+- 校验 SHA-256；
+- 写入模型版本 manifest；
+- 保留模型许可证和第三方 notices；
+- 不把临时下载文件或开发机绝对路径写入发行物。
+
+## 常见问题
+
+### 无法访问 pub.dev
+
+`flutter pub get` 和 `dart pub global activate` 都需要终端进程能够访问 `https://pub.dev`。浏览器能够访问不代表终端代理配置一定相同。检查系统代理、`HTTP_PROXY`/`HTTPS_PROXY`、证书拦截和防火墙设置，再重新运行：
+
+```text
+uv run python scripts/bootstrap.py --skip-runners
+```
+
+### 找不到 protoc-gen-dart
+
+重新激活固定版本插件：
+
+```text
+dart pub global activate protoc_plugin 25.1.0
+```
+
+`bootstrap.py` 会自动尝试把 Dart global pub cache 的 `bin` 目录加入当前子进程的 `PATH`。如果手工执行 `protoc`，则需要自行把该目录加入终端 `PATH`。
+
+### Flutter 缺少 Android 或 Windows runner
+
+重新执行：
+
+```text
+uv run python scripts/bootstrap.py --skip-doctor
+```
+
+脚本只生成缺失的 runner，并保留现有 app `pubspec.yaml`。
+
+### Windows build 找不到 Visual Studio
+
+打开 Visual Studio Installer，为现有安装增加 `Desktop development with C++` 工作负载，然后再次运行 `flutter doctor -v`。只有安装普通 Visual Studio Code 不足以编译 Flutter Windows 应用。
+
+### Android licenses 未接受
+
+执行：
+
+```text
+flutter doctor --android-licenses
+```
+
+完成后用 `flutter doctor -v` 确认 Android toolchain 不再报错。
+
+### Kotlin 报 `this and base files have different roots`
+
+Windows 上 Pub Cache 位于 C 盘而仓库位于 D 盘时，Kotlin 增量缓存无法把插件源码转换为相对于 Android 工程的路径。项目已在 `android/gradle.properties` 中关闭 Kotlin/JVM 增量编译；`build.py` 在 Android 构建前只删除遗留的 `caches-jvm` 目录，并保留 Flutter、CMake、FunASR 和 ONNX Runtime 产物。
+
+## 开发约束
+
+- 所有仓库脚本使用 Python，并由 uv 管理和执行。
+- 不提交平台专属 shell、PowerShell 或批处理脚本。
+- 协议使用语义键码，网络消息不得直接携带任意 Win32 virtual-key 或 scan code。
+- 语音结果必须先在 Android 展示；取消不发送，用户确认后才向 Windows 当前激活窗口发送 `TextInput`。
+- 不在日志中记录 TOTP、token、TLS 私钥、完整按键内容、音频或语音识别文本。
+- Windows 普通权限进程不能保证向管理员权限窗口、UAC 安全桌面、锁屏或登录界面注入输入。
+

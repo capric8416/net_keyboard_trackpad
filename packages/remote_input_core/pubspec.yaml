@@ -1,0 +1,13 @@
+name: remote_input_core
+description: Platform-independent domain models for net_keyboard_trackpad.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.12.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.26.0
+
