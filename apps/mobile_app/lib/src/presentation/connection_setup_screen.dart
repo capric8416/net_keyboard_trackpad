@@ -71,14 +71,14 @@ class _ConnectionSetupScreenState extends State<ConnectionSetupScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('连接被控端')),
+    appBar: AppBar(title: const Text('连接受控端')),
     body: Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 760),
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Text(widget.gateway.status.message ?? '配置接收端'),
+            Text(widget.gateway.status.message ?? '配置受控端'),
             const SizedBox(height: 16),
             Row(
               children: [
@@ -105,7 +105,7 @@ class _ConnectionSetupScreenState extends State<ConnectionSetupScreen> {
               maxLines: 2,
               decoration: const InputDecoration(
                 labelText: 'TLS SHA-256 指纹',
-                helperText: '逐字核对被控端状态窗口中的指纹。',
+                helperText: '逐字核对受控端状态窗口中的指纹。',
               ),
             ),
             const SizedBox(height: 12),

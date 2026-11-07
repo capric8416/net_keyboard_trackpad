@@ -1,4 +1,4 @@
-"""Build Android and/or Windows release artifacts with one cross-platform CLI."""
+"""Build Android and Windows/macOS release artifacts with one cross-platform CLI."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "target",
-        choices=("android", "windows", "all"),
+        choices=("android", "windows", "macos", "all"),
         help="Application target to build.",
     )
     parser.add_argument(
@@ -53,6 +53,13 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    desktop_target = "macos" if sys.platform == "darwin" else "windows"
+    if args.target == "windows" and sys.platform != "win32":
+        raise SystemExit("The Windows Flutter target must be built on Windows.")
+    if args.target == "macos" and sys.platform != "darwin":
+        raise SystemExit("The macOS Flutter target must be built on macOS.")
+    if args.target == "all" and sys.platform not in ("darwin", "win32"):
+        raise SystemExit("The all target requires Windows or macOS.")
     flutter = executable("flutter")
     executable("protoc")
     os.environ.update(environment_with_pub_cache_bin())
@@ -79,13 +86,12 @@ def main() -> None:
             command,
             cwd=ROOT / "apps" / "mobile_app",
         )
-    if args.target in ("windows", "all"):
-        if sys.platform != "win32":
-            raise SystemExit("The Windows Flutter target must be built on Windows.")
+    if args.target in ("windows", "macos", "all"):
+        target = desktop_target if args.target == "all" else args.target
         command = [flutter]
         if args.verbose:
             command.append("--verbose")
-        command.extend(["build", "windows", f"--{args.mode}"])
+        command.extend(["build", target, f"--{args.mode}"])
         if args.skip_pub_get:
             command.append("--no-pub")
         run(command, cwd=ROOT / "apps" / "desktop_app")

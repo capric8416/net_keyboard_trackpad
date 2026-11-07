@@ -1,5 +1,5 @@
 name: net_keyboard_mobile
-description: Android remote keyboard client.
+description: Network keyboard and pointer controller app.
 version: 0.1.0+1
 publish_to: none
 resolution: workspace

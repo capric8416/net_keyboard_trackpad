@@ -1,17 +1,14 @@
-# net_keyboard_desktop
+# 网络键鼠受控端
 
-A new Flutter project.
+当前支持 Windows 与 macOS，计划扩展 Linux。运行方式、配对、辅助功能权限、按键映射、构建与发布限制见仓库 [README](../../README.md)。
 
-## Getting Started
+从仓库根目录通过统一脚本构建：
 
-This project is a starting point for a Flutter application.
+```text
+uv run python scripts/build.py macos --mode release
+uv run python scripts/build.py windows --mode release
+```
 
-A few resources to get you started if this is your first Flutter project:
+macOS 目标只能在 macOS 构建，Windows 目标只能在 Windows 构建。`flutter run -d macos` 和 `flutter run -d windows` 仅用于本地调试运行，不作为交付构建入口。
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+macOS 原生桥接位于 `macos/Runner/MainFlutterWindow.swift`；共享 gRPC 服务通过 `ControlledDeviceInputInjector` 调用各平台。macOS 不启用 App Sandbox，身份和配对信息存于 Keychain。首次输入前需在系统设置授予辅助功能权限。

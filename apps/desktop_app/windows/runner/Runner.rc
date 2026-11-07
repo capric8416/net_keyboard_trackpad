@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.netkeyboard" "\0"
-            VALUE "FileDescription", "net_keyboard_desktop" "\0"
+            VALUE "FileDescription", "Network Keyboard and Pointer Controlled Device" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "net_keyboard_desktop" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.netkeyboard. All rights reserved." "\0"
             VALUE "OriginalFilename", "net_keyboard_desktop.exe" "\0"
-            VALUE "ProductName", "net_keyboard_desktop" "\0"
+            VALUE "ProductName", "Network Keyboard and Pointer" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

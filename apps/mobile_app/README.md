@@ -1,17 +1,5 @@
-# net_keyboard_mobile
+# 网络键鼠控制端
 
-A new Flutter project.
+当前支持 Android，计划扩展 iOS。通用使用说明、配对流程、构建方式及平台支持计划见仓库 [README](../../README.md)。
 
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+控制端负责受控端列表、TLS 指纹固定、配对、连接管理、键盘、触控板和本地语音识别。共享协议与领域模型分别位于 `packages/remote_input_protocol` 和 `packages/remote_input_core`。

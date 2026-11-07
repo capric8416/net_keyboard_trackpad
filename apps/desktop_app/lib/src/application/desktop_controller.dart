@@ -7,11 +7,12 @@ import 'package:flutter/foundation.dart';
 import 'package:grpc/grpc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'macos_input_injector.dart';
 import '../security/server_identity.dart';
 import '../security/totp.dart';
 import '../server/remote_input_service.dart';
 
-final class DesktopController extends ChangeNotifier {
+final class ControlledDeviceController extends ChangeNotifier {
   ServerIdentity? _identity;
   Server? _server;
   Timer? _codeTimer;
@@ -20,6 +21,13 @@ final class DesktopController extends ChangeNotifier {
   String? _connectedDevice;
   Object? _error;
   List<NetworkInterface> _interfaces = const [];
+
+  bool accessibilityTrusted = false;
+  Future<void> checkAccessibility({bool prompt = false}) async {
+    if (!Platform.isMacOS) return;
+    accessibilityTrusted = await MacOSInputInjector().isTrusted(prompt: prompt);
+    notifyListeners();
+  }
 
   int get port => _port;
   String get status => _status;
@@ -38,6 +46,7 @@ final class DesktopController extends ChangeNotifier {
 
   Future<void> initialize() async {
     try {
+      await checkAccessibility();
       final preferences = await SharedPreferences.getInstance();
       _port = preferences.getInt('listen_port') ?? 39091;
       _interfaces = await NetworkInterface.list(
@@ -49,7 +58,7 @@ final class DesktopController extends ChangeNotifier {
       final service = RemoteInputService(
         identity: _identity!,
         identityStore: store,
-        input: WindowsInputInjector(),
+        input: Platform.isMacOS ? MacOSInputInjector() : WindowsInputInjector(),
         onConnectionChanged: (connected, peerAddress) {
           _connectedDevice = connected ? peerAddress : null;
           _status = connected ? '已连接：$peerAddress' : '等待连接';
@@ -72,8 +81,9 @@ final class DesktopController extends ChangeNotifier {
         (_) => notifyListeners(),
       );
     } on SocketException catch (error) {
-      if (error.osError?.errorCode == 10048) {
-        _error = '端口 $_port 已被占用。请检查是否已有接收端在系统托盘运行，'
+      if ([10048, 48, 98].contains(error.osError?.errorCode)) {
+        _error =
+            '端口 $_port 已被占用。请检查是否已有受控端在系统托盘运行，'
             '或是否有其他程序正在使用该端口。';
         _status = '端口已被占用';
       } else {

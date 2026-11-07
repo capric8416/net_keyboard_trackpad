@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:desktop_input_windows/desktop_input_windows.dart' as desktop;
 import 'package:fixnum/fixnum.dart';
 import 'package:grpc/grpc.dart';
 import 'package:remote_input_core/remote_input_core.dart' as core;
@@ -15,7 +14,7 @@ final class RemoteInputService extends protocol.RemoteInputServiceBase {
   RemoteInputService({
     required ServerIdentity identity,
     required ServerIdentityStore identityStore,
-    required desktop.WindowsInputInjector input,
+    required core.ControlledDeviceInputInjector input,
     required this.onConnectionChanged,
   }) : _identity = identity,
        _identityStore = identityStore,
@@ -23,7 +22,7 @@ final class RemoteInputService extends protocol.RemoteInputServiceBase {
 
   ServerIdentity _identity;
   final ServerIdentityStore _identityStore;
-  final desktop.WindowsInputInjector _input;
+  final core.ControlledDeviceInputInjector _input;
   final void Function(bool connected, String? peerAddress) onConnectionChanged;
   final Map<String, _Challenge> _challenges = {};
   final Set<String> _recentEvents = {};
@@ -37,7 +36,7 @@ final class RemoteInputService extends protocol.RemoteInputServiceBase {
     protocol.ServerInfoRequest request,
   ) async => protocol.ServerInfoResponse(
     serverId: _identity.serverId,
-    displayName: '网络键盘接收端',
+    displayName: '网络键鼠受控端',
     protocolVersion: _version(),
     certificateSha256: _identity.certificateFingerprint,
     capabilities: _capabilities,
@@ -95,7 +94,7 @@ final class RemoteInputService extends protocol.RemoteInputServiceBase {
     final deviceId = const Uuid().v4();
     final device = PairedDevice(
       id: deviceId,
-      name: request.clientName.trim().isEmpty ? 'Android' : request.clientName,
+      name: request.clientName.trim().isEmpty ? '网络键鼠控制端' : request.clientName,
       tokenHash: ServerIdentityStore.tokenHash(token),
     );
     _identity.pairedDevices[deviceId] = device;
@@ -148,7 +147,7 @@ final class RemoteInputService extends protocol.RemoteInputServiceBase {
             acknowledgedSequence: envelope.sequence,
             hello: protocol.ServerHello(
               serverId: _identity.serverId,
-              displayName: '网络键盘接收端',
+              displayName: '网络键鼠受控端',
               protocolVersion: _version(),
               capabilities: _capabilities,
               heartbeatIntervalSeconds: 10,
@@ -178,7 +177,7 @@ final class RemoteInputService extends protocol.RemoteInputServiceBase {
         }
         _rememberEvent(envelope.eventId);
         try {
-          final count = _inject(envelope);
+          final count = await _inject(envelope);
           yield _result(
             envelope,
             true,
@@ -206,7 +205,7 @@ final class RemoteInputService extends protocol.RemoteInputServiceBase {
     }
   }
 
-  int _inject(protocol.ClientEnvelope envelope) {
+  Future<int> _inject(protocol.ClientEnvelope envelope) async {
     if (envelope.hasKeyStroke()) {
       final wireKey = envelope.keyStroke.key.value;
       if (wireKey <= 0 || wireKey > core.SemanticKey.values.length) {
@@ -229,20 +228,17 @@ final class RemoteInputService extends protocol.RemoteInputServiceBase {
     if (envelope.hasPointerInput()) {
       final pointer = envelope.pointerInput;
       final button = switch (pointer.button) {
-        protocol.PointerButton.POINTER_BUTTON_LEFT =>
-          desktop.PointerButton.left,
-        protocol.PointerButton.POINTER_BUTTON_RIGHT =>
-          desktop.PointerButton.right,
+        protocol.PointerButton.POINTER_BUTTON_LEFT => core.PointerButton.left,
+        protocol.PointerButton.POINTER_BUTTON_RIGHT => core.PointerButton.right,
         protocol.PointerButton.POINTER_BUTTON_MIDDLE =>
-          desktop.PointerButton.middle,
-        _ => desktop.PointerButton.none,
+          core.PointerButton.middle,
+        _ => core.PointerButton.none,
       };
       return _input.injectPointer(
-        deltaX: pointer.deltaX.clamp(-4096, 4096) as int,
-        deltaY: pointer.deltaY.clamp(-4096, 4096) as int,
-        wheelDelta: pointer.wheelDelta.clamp(-1200, 1200) as int,
-        horizontalWheelDelta:
-            pointer.horizontalWheelDelta.clamp(-1200, 1200) as int,
+        deltaX: pointer.deltaX.clamp(-4096, 4096),
+        deltaY: pointer.deltaY.clamp(-4096, 4096),
+        wheelDelta: pointer.wheelDelta.clamp(-1200, 1200),
+        horizontalWheelDelta: pointer.horizontalWheelDelta.clamp(-1200, 1200),
         button: button,
         buttonDown: pointer.buttonDown,
       );

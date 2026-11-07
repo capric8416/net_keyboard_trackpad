@@ -6,13 +6,14 @@ import 'package:win32/win32.dart';
 
 import 'windows_key_map.dart';
 
-enum PointerButton { none, left, right, middle }
+export 'package:remote_input_core/remote_input_core.dart' show PointerButton;
 
-final class WindowsInputInjector {
+final class WindowsInputInjector implements ControlledDeviceInputInjector {
   WindowsInputInjector() {
     WindowsKeyMap.validate();
   }
 
+  @override
   int injectKeyStroke(KeyStroke stroke) {
     final key = WindowsKeyMap.keys[stroke.key];
     if (key == null) throw ArgumentError('Unsupported key: ${stroke.key.name}');
@@ -45,6 +46,7 @@ final class WindowsInputInjector {
     });
   }
 
+  @override
   int injectText(String text) {
     if (text.isEmpty) return 0;
     if (GetForegroundWindow().address == 0) {
@@ -69,6 +71,7 @@ final class WindowsInputInjector {
     });
   }
 
+  @override
   int injectPointer({
     int deltaX = 0,
     int deltaY = 0,

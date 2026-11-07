@@ -1,6 +1,7 @@
 library;
 
 export 'src/connection_state.dart';
+export 'src/controlled_device_input.dart';
 export 'src/keyboard_layout.dart';
 export 'src/modifier_set.dart';
 export 'src/semantic_key.dart';

@@ -24,7 +24,7 @@ WINDOWS_ICON_SIZES = (16, 20, 24, 32, 40, 48, 64, 128, 256)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate Android and Windows application icons.",
+        description="Generate Android, Windows and macOS application icons.",
     )
     parser.add_argument(
         "--source",
@@ -77,6 +77,25 @@ def generate_windows_icon(source: Image.Image) -> None:
     )
 
 
+def generate_macos_icons(source: Image.Image) -> None:
+    import json
+    output = PROJECT_ROOT / "apps/desktop_app/macos/Runner/Assets.xcassets/AppIcon.appiconset"
+    output.mkdir(parents=True, exist_ok=True)
+    images = []
+    for size in (16, 32, 128, 256, 512):
+        for scale in (1, 2):
+            pixels = size * scale
+            name = f"app_icon_{pixels}.png"
+            source.resize((pixels, pixels), Image.Resampling.LANCZOS).save(output / name)
+            images.append({"idiom": "mac", "size": f"{size}x{size}",
+                           "scale": f"{scale}x", "filename": name})
+    (output / "Contents.json").write_text(json.dumps({"images": images,
+        "info": {"author": "xcode", "version": 1}}, indent=2) + "\n")
+    tray = PROJECT_ROOT / "apps/desktop_app/assets/tray_icon.png"
+    tray.parent.mkdir(parents=True, exist_ok=True)
+    source.resize((32, 32), Image.Resampling.LANCZOS).save(tray)
+
+
 def main() -> None:
     args = parse_args()
     source_path = args.source.resolve()
@@ -84,6 +103,7 @@ def main() -> None:
     print(f"Source {source.width}x{source.height}: {source_path}")
     generate_android_icons(source)
     generate_windows_icon(source)
+    generate_macos_icons(source)
 
 
 if __name__ == "__main__":

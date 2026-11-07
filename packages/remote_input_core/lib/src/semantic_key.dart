@@ -1,8 +1,8 @@
 /// Platform-neutral key identifiers sent over the wire.
 ///
-/// These names are intentionally independent from Windows virtual-key and scan
-/// code values. Published protobuf enum numbers must remain stable even when a
-/// desktop implementation changes.
+/// These names are intentionally independent from platform key codes. Published
+/// protobuf enum numbers must remain stable when a controlled-device platform
+/// implementation changes.
 enum SemanticKey {
   escape,
   f1,

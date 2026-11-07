@@ -107,12 +107,12 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                 tooltip: '返回键盘',
               )
             : null,
-        title: const Text('已保存的设备'),
+        title: const Text('已保存的受控端'),
         actions: [
           IconButton(
             onPressed: _addDevice,
             icon: const Icon(Icons.add),
-            tooltip: '添加设备',
+            tooltip: '添加受控端',
           ),
         ],
       ),
@@ -138,9 +138,9 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                   children: [
                     Icon(Icons.devices_other, size: 64),
                     SizedBox(height: 16),
-                    Text('尚未保存设备'),
+                    Text('尚未保存受控端'),
                     SizedBox(height: 8),
-                    Text('点击右上角添加设备并完成首次配对。'),
+                    Text('点击右上角添加受控端并完成首次配对。'),
                   ],
                 ),
               ),
@@ -165,7 +165,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addDevice,
         icon: const Icon(Icons.add),
-        label: const Text('添加设备'),
+        label: const Text('添加受控端'),
       ),
     );
   }
@@ -204,7 +204,7 @@ class _DeviceCard extends StatelessWidget {
       title: Text('${profile.host}:${profile.port}'),
       subtitle: Text(
         [
-          if (isConnected) '已连接' else if (isActive) statusMessage ?? '当前设备',
+          if (isConnected) '已连接' else if (isActive) statusMessage ?? '当前受控端',
           '指纹 ${_shortFingerprint(profile.fingerprint)}',
         ].join('\n'),
       ),
@@ -233,7 +233,7 @@ class _DeviceCard extends StatelessWidget {
               if (value == 'delete') onDelete();
             },
             itemBuilder: (context) => const [
-              PopupMenuItem(value: 'delete', child: Text('删除设备')),
+              PopupMenuItem(value: 'delete', child: Text('删除受控端')),
             ],
           ),
         ],

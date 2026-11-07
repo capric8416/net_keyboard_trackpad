@@ -1,17 +1,26 @@
-# Net Keyboard Trackpad
+# Network Keyboard & Pointer（网络键鼠）
 
-局域网远程输入工具：Android 端提供 64 键触控键盘、Fn 功能层和本地 FunASR 语音输入，Windows 端作为托盘后台应用接收 gRPC 命令并向当前激活窗口注入按键或文本。
+局域网远程输入工具，由“网络键鼠控制端”和“网络键鼠受控端”组成。控制端提供触控键盘、语音输入和触控板，并通过 gRPC 将输入发送到受控端；受控端常驻后台，将命令注入当前激活窗口。
 
-产品范围、协议、安全约束和完整任务列表见 [`plan.md`](plan.md)。当前代码包含 TLS gRPC、TOTP 首次配对、控制会话、Windows `SendInput`、84 键键盘、右侧多点触控板、托盘后台运行、FunASR 录音/FFI 和语音结果确认流程。
+当前控制端支持 Android，计划扩展 iOS；当前受控端支持 Windows 和 macOS，计划扩展 Linux。产品范围、协议、安全约束和完整任务列表见 [`plan.md`](plan.md)。平台无关流程包含 TLS gRPC、TOTP 首次配对、控制会话、64 键键盘、右侧多点触控板、FunASR 录音/FFI 和语音结果确认；输入注入由各受控平台分别实现。
+
+## 角色与平台
+
+| 产品角色 | 当前平台 | 计划平台 | 仓库应用 |
+| --- | --- | --- | --- |
+| 网络键鼠控制端 | Android | iOS | `apps/mobile_app` |
+| 网络键鼠受控端 | Windows、macOS | Linux | `apps/desktop_app` |
+
+通用产品说明、界面和协议展示名只使用“控制端”和“受控端”。系统名称仅用于构建步骤、平台实现及操作系统限制。
 
 ## 仓库结构
 
 ```text
 apps/
-├─ mobile_app/                 Android Flutter 客户端
-└─ desktop_app/                Windows Flutter 接收端
+├─ mobile_app/                 网络键鼠控制端 Flutter 应用
+└─ desktop_app/                网络键鼠受控端 Flutter 应用
 packages/
-├─ remote_input_core/          平台无关的键码、84 键布局和状态模型
+├─ remote_input_core/          平台无关的键码、64 键布局和状态模型
 ├─ remote_input_protocol/      Protocol Buffers/gRPC 契约
 └─ desktop_input_windows/      Windows scan code 映射
 scripts/                       uv 执行的跨平台 Python 工具
@@ -80,7 +89,7 @@ flutter doctor --android-licenses
 
 ### Windows 构建环境
 
-Windows 桌面端必须在 Windows 上编译。安装 Visual Studio 2022，并选择工作负载 `Desktop development with C++`，同时确保包含：
+Windows 受控端必须在 Windows 上编译。安装 Visual Studio 2022，并选择工作负载 `Desktop development with C++`，同时确保包含：
 
 - MSVC C++ x64/x86 build tools；
 - Windows 10 或 Windows 11 SDK；
@@ -92,7 +101,7 @@ Windows 桌面端必须在 Windows 上编译。安装 Visual Studio 2022，并�
 flutter doctor -v
 ```
 
-`Windows toolchain` 必须显示可用，才能编译桌面端。
+`Windows toolchain` 必须显示可用，才能编译该平台的受控端。
 
 ## 首次初始化
 
@@ -115,8 +124,8 @@ uv run python scripts/bootstrap.py
 该命令会依次：
 
 1. 检查 `flutter`、`dart`、`uv` 和 `protoc`；
-2. 启用 Flutter Android 与 Windows desktop target；
-3. 为缺失的平台生成 `apps/mobile_app/android` 和 `apps/desktop_app/windows` runner；
+2. 启用 Flutter Android、Windows 与 macOS desktop target；
+3. 为缺失的平台生成 `apps/mobile_app/android` 、`apps/desktop_app/windows` 和 `apps/desktop_app/macos` runner；
 4. 安装固定版本的 `protoc_plugin`；
 5. 在 workspace 根目录执行 `flutter pub get`；
 6. 从 `remote_input.proto` 生成 Dart protobuf/gRPC 源码；
@@ -159,7 +168,7 @@ packages/remote_input_protocol/lib/src/generated/
 
 协议字段号和枚举值发布后不得修改或复用；新增字段必须使用新编号。
 
-## 编译 Android 客户端
+## 在 Android 构建控制端
 
 首次编译前必须先完成“首次初始化”。
 
@@ -197,9 +206,9 @@ Debug 产物位于 `apps/mobile_app/build/app/outputs/flutter-apk/`。
 
 正式发布前需要在 `apps/mobile_app/android` 配置独立的 release keystore。密钥、密码和签名配置不得提交到仓库。
 
-## 编译 Windows 接收端
+## 在 Windows 构建受控端
 
-Windows 端必须在装有 Visual Studio C++ toolchain 的 Windows 环境中构建：
+Windows 受控端必须在装有 Visual Studio C++ toolchain 的 Windows 环境中构建：
 
 ```text
 uv run python scripts/build.py windows --mode release
@@ -225,13 +234,53 @@ Debug 目录通常位于：
 apps/desktop_app/build/windows/x64/runner/Debug/
 ```
 
-## 同时编译两端
+## 在 macOS 构建受控端
+
+在 macOS 上安装 Xcode（完成首次启动和许可证确认）、Xcode Command Line Tools 与 CocoaPods；用 `flutter doctor -v` 确认 macOS toolchain 可用。
+
+```text
+uv run python scripts/build.py macos --mode release
+```
+
+Release 产物：`apps/desktop_app/build/macos/Build/Products/Release/net_keyboard_desktop.app`。分发整个 `.app`。跨机器发布需自行配置 Developer ID 签名及公证；脚本不会提交公证或安装证书。
+
+Debug 构建：
+
+```text
+uv run python scripts/build.py macos --mode debug
+```
+
+Debug 产物位于 `apps/desktop_app/build/macos/Build/Products/Debug/net_keyboard_desktop.app`。需要直接连接调试器运行时，使用后文“本地调试运行”中的 Flutter 命令；该命令不作为交付构建入口。
+
+启动后受控端驻留菜单栏，点击图标打开状态页，关闭窗口继续监听；再次启动会唤醒已有实例。控制端按现有流程填写受控端的局域网地址、端口、TLS 指纹和安全码，键盘、语音确认文本与触控板复用同一协议。当前 Android 实现仍在本地完成语音识别。
+
+首次使用在状态页点击“授权 / 重新检查”，进入 **系统设置 → 隐私与安全性 → 辅助功能**，允许受控端控制此设备；返回后点击重新检查。未授权或权限被撤销时，输入命令返回 `INPUT_BLOCKED`。授权变化可能需要重启应用；更新签名或移动应用后也可能需要重新授权。系统询问局域网访问或防火墙入站权限时，允许受信任局域网访问 TCP 39091。
+
+macOS 使用 Core Graphics 注入事件，凭据保存在 macOS Keychain（不使用共享 Keychain 权限）。为支持跨应用输入，此 runner 不启用 App Sandbox；当前交付范围是本地 `.app`，商店发行需要另行评估。
+
+| 控制端按键 | macOS 行为 |
+| --- | --- |
+| Meta | Command（左右独立） |
+| Alt | Option（左右独立） |
+| Ctrl、Shift | Control、Shift（左右独立） |
+| Backspace / Delete | 向后删除 / 向前删除 |
+| Print Screen（Fn+P） | Command+Shift+3 系统截图 |
+| Menu（Fn+\） | Shift+F10，是否打开菜单由目标应用决定 |
+| Home / End | 使用 macOS 原生 Home / End 语义 |
+
+复制粘贴使用 Meta+C / Meta+V。按键字符受 Mac 当前键盘布局和输入法影响。中文与 emoji 文本使用 Unicode 事件；部分应用自行处理键盘事件，可能忽略 Unicode 内容。Core Graphics 事件提交后没有目标应用接收确认，因此 ACK 仅表示事件已提交。安全输入、锁屏、登录界面和受保护应用不保证可用。
+
+手工验收：控制端配对 macOS 受控端，在 TextEdit、浏览器输入框与 Terminal 中检查普通键、左右修饰键、Command+C/V、中文/emoji、单击/双击/右键、双轴滚动；撤销辅助功能权限后确认命令失败，再授权恢复；关闭窗口、重复启动、断网重连和退出后端口释放也需验收。
+
+## 同时编译控制端和受控端
 
 在 Windows 上安装好 Android 和 Windows 两套 toolchain 后可以执行：
 
 ```text
 uv run python scripts/build.py all --mode release --android-format apk
 ```
+
+`all` 在 Windows 构建 Android+Windows，在 macOS 构建 Android+macOS。
 
 `build.py` 默认先执行 `flutter pub get` 和 protobuf 生成，再编译目标。依赖和协议代码已经确认没有变化时可以减少重复工作：
 
@@ -243,13 +292,13 @@ uv run python scripts/build.py all --mode release --skip-pub-get
 
 ## 生成应用图标
 
-项目根目录的 `icon.png` 是 Android 和 Windows 应用图标母版。替换母版后执行：
+项目根目录的 `icon.png` 是控制端和受控端的应用图标母版。替换母版后执行：
 
 ```text
 uv run scripts/generate_icons.py
 ```
 
-脚本使用 PEP 723 声明 Pillow 依赖，由 `uv` 自动创建隔离环境。它会生成 Android `mdpi`、`hdpi`、`xhdpi`、`xxhdpi`、`xxxhdpi` 五档 launcher PNG，并生成包含 16、20、24、32、40、48、64、128、256 像素图像帧的 Windows ICO。Android Manifest 和 Windows Runner 已分别引用生成的 `ic_launcher.png` 与 `app_icon.ico`。
+脚本使用 PEP 723 声明 Pillow 依赖，由 `uv` 自动创建隔离环境。它还会生成 macOS AppIcon 和菜单栏 PNG，并生成 Android `mdpi`、`hdpi`、`xhdpi`、`xxhdpi`、`xxxhdpi` 五档 launcher PNG，并生成包含 16、20、24、32、40、48、64、128、256 像素图像帧的 Windows ICO。Android Manifest 和 Windows Runner 已分别引用生成的 `ic_launcher.png` 与 `app_icon.ico`。
 
 ## 本地调试运行
 
@@ -273,20 +322,26 @@ cd apps/desktop_app
 flutter run -d windows
 ```
 
-移动端和桌面端都在调试运行时，Windows 防火墙可能询问是否允许入站连接。开发阶段只允许专用网络。Android 连接的主机地址应使用 Windows 的局域网 IP，不能使用 Android 设备自身的 `127.0.0.1`。
+macOS：
+
+```text
+cd apps/desktop_app
+flutter run -d macos
+```
+
+正式构建统一使用前文的 `uv run python scripts/build.py ...`；这里直接调用 Flutter 仅用于连接设备和调试器的开发运行。控制端和受控端都在调试运行时，Windows 防火墙可能询问是否允许入站连接。开发阶段只允许专用网络。控制端连接的主机地址应使用受控端的局域网 IP，不能使用控制端设备自身的 `127.0.0.1`。
 
 ## 首次配对与使用
 
-1. 启动 Windows 端，从托盘打开状态窗口。
-   Windows 接收端只允许运行一个实例；再次启动会直接唤醒已有的托盘窗口。
-2. 记录 Windows 状态页中的局域网地址、TLS SHA-256 指纹和当前 6 位安全码。
-3. Android 填入地址、端口、指纹和验证码。Android 会先固定证书指纹，再通过 TLS 发送 TOTP。
-4. 配对成功后长期随机令牌保存到两端系统安全存储。移动端启动时只显示设备列表，由用户选择要连接的设备。
-5. 键盘页点击“设备”可查看全部已保存的被控端，并可切换连接、主动断开、删除或添加设备；主动断开会立即取消连接尝试、退避计时和旧连接回调，不会再次自动重连。
+1. 启动受控端，从托盘或菜单栏打开状态窗口。受控端只允许运行一个实例；再次启动会唤醒已有实例的状态窗口。
+2. 记录受控端状态页中的局域网地址、TLS SHA-256 指纹和当前 6 位安全码。
+3. 控制端填入地址、端口、指纹和验证码。控制端会先固定证书指纹，再通过 TLS 发送 TOTP。
+4. 配对成功后长期随机令牌保存到两端系统安全存储。控制端启动时只显示受控端列表，由用户选择要连接的设备。
+5. 键盘页点击“受控端”可查看全部已保存的受控端，并可切换连接、主动断开、删除或添加；主动断开会立即取消连接尝试、退避计时和旧连接回调，不会再次自动重连。
 6. 左侧键盘发送普通键和保持选中的组合键；右侧触控板支持单指移动光标、单击、双击、双指轻点右键，以及双指垂直/水平滚动。
-6. 长按语音按钮录音，松开后由本地 FunASR 识别；结果只在点击“确认输入”后注入 Windows 当前激活窗口。
+7. 长按语音按钮录音，松开后由本地 FunASR 识别；结果只在点击“确认输入”后注入受控端当前激活窗口。
 
-移动端切换网络后，旧控制流如果没有立即收到 TCP 断开通知，接收端会在 35 秒内因心跳超时主动释放旧会话，之后移动端可自动重连。
+控制端切换网络后，旧控制流如果没有立即收到 TCP 断开通知，受控端会在 35 秒内因心跳超时主动释放旧会话，之后控制端可自动重连。
 
 ## 检查与测试
 
@@ -296,6 +351,7 @@ flutter run -d windows
 flutter analyze
 flutter test packages/remote_input_core
 flutter test packages/desktop_input_windows
+flutter test apps/desktop_app
 ```
 
 不依赖 pub.dev 包的核心校验可以直接执行：
@@ -368,7 +424,7 @@ dart pub global activate protoc_plugin 25.1.0
 
 `bootstrap.py` 会自动尝试把 Dart global pub cache 的 `bin` 目录加入当前子进程的 `PATH`。如果手工执行 `protoc`，则需要自行把该目录加入终端 `PATH`。
 
-### Flutter 缺少 Android 或 Windows runner
+### Flutter 缺少 Android、Windows 或 macOS runner
 
 重新执行：
 
@@ -401,7 +457,7 @@ Windows 上 Pub Cache 位于 C 盘而仓库位于 D 盘时，Kotlin 增量缓存
 - 所有仓库脚本使用 Python，并由 uv 管理和执行。
 - 不提交平台专属 shell、PowerShell 或批处理脚本。
 - 协议使用语义键码，网络消息不得直接携带任意 Win32 virtual-key 或 scan code。
-- 语音结果必须先在 Android 展示；取消不发送，用户确认后才向 Windows 当前激活窗口发送 `TextInput`。
+- 语音结果必须先在控制端展示；取消不发送，用户确认后才向受控端当前激活窗口发送 `TextInput`。
 - 不在日志中记录 TOTP、token、TLS 私钥、完整按键内容、音频或语音识别文本。
 - Windows 普通权限进程不能保证向管理员权限窗口、UAC 安全桌面、锁屏或登录界面注入输入。
 

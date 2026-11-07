@@ -5,14 +5,15 @@ import 'infrastructure/remote_input_gateway.dart';
 import 'presentation/device_list_screen.dart';
 import 'presentation/keyboard_screen.dart';
 
-class RemoteKeyboardApp extends StatefulWidget {
-  const RemoteKeyboardApp({super.key});
+class NetworkInputControllerApp extends StatefulWidget {
+  const NetworkInputControllerApp({super.key});
 
   @override
-  State<RemoteKeyboardApp> createState() => _RemoteKeyboardAppState();
+  State<NetworkInputControllerApp> createState() =>
+      _NetworkInputControllerAppState();
 }
 
-class _RemoteKeyboardAppState extends State<RemoteKeyboardApp> {
+class _NetworkInputControllerAppState extends State<NetworkInputControllerApp> {
   late final GrpcRemoteInputGateway _gateway;
   late final KeyboardController _controller;
   bool _initializing = true;
@@ -45,7 +46,7 @@ class _RemoteKeyboardAppState extends State<RemoteKeyboardApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: '网络键盘',
+    title: '网络键鼠控制端',
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       colorScheme: ColorScheme.fromSeed(

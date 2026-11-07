@@ -53,7 +53,11 @@ final class PairedDevice {
 
 final class ServerIdentityStore {
   ServerIdentityStore([FlutterSecureStorage? storage])
-    : _storage = storage ?? const FlutterSecureStorage();
+    : _storage =
+          storage ??
+          const FlutterSecureStorage(
+            mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+          );
 
   static const _storageKey = 'net_keyboard.server_identity.v1';
   final FlutterSecureStorage _storage;
@@ -84,8 +88,8 @@ final class ServerIdentityStore {
     final privateKey = pair.privateKey as RSAPrivateKey;
     final publicKey = pair.publicKey as RSAPublicKey;
     final attributes = <String, String>{
-      'CN': 'Net Keyboard Receiver',
-      'O': 'Net Keyboard',
+      'CN': 'Network Keyboard and Pointer Controlled Device',
+      'O': 'Network Keyboard and Pointer',
       'C': 'CN',
     };
     final csr = X509Utils.generateRsaCsrPem(

@@ -1,30 +1,26 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:net_keyboard_desktop/main.dart';
+import 'package:net_keyboard_desktop/src/application/desktop_controller.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
-
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
-  });
+  testWidgets(
+    'Status page displays pairing and fingerprint before initialization',
+    (tester) async {
+      final controller = ControlledDeviceController();
+      await tester.pumpWidget(
+        NetworkInputControlledApp(controller: controller),
+      );
+      expect(
+        tester.widget<MaterialApp>(find.byType(MaterialApp)).title,
+        '网络键鼠受控端',
+      );
+      expect(find.text('网络键鼠受控端'), findsOneWidget);
+      expect(find.text('安全码'), findsOneWidget);
+      expect(find.text('TLS 证书 SHA-256 指纹'), findsOneWidget);
+      expect(find.text('------'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    },
+  );
 }

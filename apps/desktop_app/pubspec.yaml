@@ -1,5 +1,5 @@
 name: net_keyboard_desktop
-description: Windows remote input receiver.
+description: Network keyboard and pointer controlled-device app.
 version: 0.1.0+1
 publish_to: none
 resolution: workspace
@@ -36,5 +36,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/tray_icon.png
     - windows/runner/resources/app_icon.ico
 

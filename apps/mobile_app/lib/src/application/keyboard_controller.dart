@@ -45,7 +45,7 @@ final class KeyboardController extends ChangeNotifier {
 
   Future<void> pressKey(SemanticKey key, {bool repeated = false}) async {
     if (!canSend) {
-      _setError(_connectionStatus.message ?? '尚未连接被控端');
+      _setError(_connectionStatus.message ?? '尚未连接受控端');
       return;
     }
     final stroke = KeyStroke(key: key, modifierBits: _modifiers.bits);

@@ -197,7 +197,7 @@ class _StatusBar extends StatelessWidget {
           TextButton.icon(
             onPressed: onManageDevices,
             icon: const Icon(Icons.devices),
-            label: const Text('设备'),
+            label: const Text('受控端'),
           ),
           const SizedBox(width: 8),
           VoiceInputButton(controller: controller),

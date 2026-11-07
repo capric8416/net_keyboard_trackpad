@@ -292,7 +292,7 @@ abstract final class Standard64Layout {
         fnLabel: 'RCtrl',
         fnModifier: ModifierKey.rightCtrl,
       ),
-      KeyboardKeySpec.modifier('left_meta', 'Win', ModifierKey.leftMeta),
+      KeyboardKeySpec.modifier('left_meta', 'Meta', ModifierKey.leftMeta),
       KeyboardKeySpec.modifier('left_alt', 'Alt', ModifierKey.leftAlt),
       KeyboardKeySpec.remote('space', '', SemanticKey.space, width: 6.25),
       KeyboardKeySpec.modifier('right_alt', 'Alt', ModifierKey.rightAlt),

@@ -1,7 +1,6 @@
 import 'dart:io';
-import 'dart:ui' show FontFeature;
 
-import 'package:flutter/material.dart' hide MenuItem;
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:system_tray/system_tray.dart';
 import 'package:window_manager/window_manager.dart';
@@ -12,31 +11,33 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
   windowManager.addListener(_CloseToTray());
-  final controller = DesktopController();
+  final controller = ControlledDeviceController();
   await controller.initialize();
   await _Tray(controller).initialize();
   const options = WindowOptions(
     size: Size(640, 620),
     center: true,
-    title: '网络键盘接收端',
+    title: '网络键鼠受控端',
   );
   await windowManager.waitUntilReadyToShow(options, () async {
     await windowManager.setPreventClose(true);
     await windowManager.hide();
   });
-  runApp(DesktopReceiverApp(controller: controller));
+  runApp(NetworkInputControlledApp(controller: controller));
 }
 
 class _Tray {
   _Tray(this.controller);
-  final DesktopController controller;
+  final ControlledDeviceController controller;
   final SystemTray tray = SystemTray();
 
   Future<void> initialize() async {
     await tray.initSystemTray(
-      title: '网络键盘',
-      iconPath: 'windows/runner/resources/app_icon.ico',
-      toolTip: '网络键盘：${controller.status}，端口 ${controller.port}',
+      title: '网络键鼠受控端',
+      iconPath: Platform.isMacOS
+          ? 'assets/tray_icon.png'
+          : 'windows/runner/resources/app_icon.ico',
+      toolTip: '网络键鼠受控端：${controller.status}，端口 ${controller.port}',
     );
     final menu = Menu();
     await menu.buildFrom([
@@ -75,13 +76,13 @@ class _CloseToTray with WindowListener {
   }
 }
 
-class DesktopReceiverApp extends StatelessWidget {
-  const DesktopReceiverApp({required this.controller, super.key});
-  final DesktopController controller;
+class NetworkInputControlledApp extends StatelessWidget {
+  const NetworkInputControlledApp({required this.controller, super.key});
+  final ControlledDeviceController controller;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: '网络键盘接收端',
+    title: '网络键鼠受控端',
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff4f46e5)),
@@ -93,13 +94,13 @@ class DesktopReceiverApp extends StatelessWidget {
 
 class _StatusPage extends StatelessWidget {
   const _StatusPage({required this.controller});
-  final DesktopController controller;
+  final ControlledDeviceController controller;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: controller,
     builder: (context, _) => Scaffold(
-      appBar: AppBar(title: const Text('网络键盘接收端')),
+      appBar: AppBar(title: const Text('网络键鼠受控端')),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -109,6 +110,26 @@ class _StatusPage extends StatelessWidget {
             ),
             title: Text(controller.status),
           ),
+          if (Platform.isMacOS)
+            ListTile(
+              leading: Icon(
+                controller.accessibilityTrusted
+                    ? Icons.check_circle
+                    : Icons.accessibility_new,
+              ),
+              title: Text(
+                controller.accessibilityTrusted
+                    ? '辅助功能已授权'
+                    : '需要辅助功能权限才能控制键盘和鼠标',
+              ),
+              subtitle: const Text('系统设置 → 隐私与安全性 → 辅助功能；授权后点击重新检查'),
+              trailing: TextButton(
+                onPressed: () => controller.checkAccessibility(
+                  prompt: !controller.accessibilityTrusted,
+                ),
+                child: const Text('授权 / 重新检查'),
+              ),
+            ),
           const Divider(),
           Text('连接地址', style: Theme.of(context).textTheme.titleMedium),
           for (final address in controller.addresses)

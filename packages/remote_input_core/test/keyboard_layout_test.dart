@@ -24,4 +24,11 @@ void main() {
     expect(shifted.contains(ModifierKey.rightShift), isFalse);
     expect(shifted.toggle(ModifierKey.leftShift), empty);
   });
+
+  test('platform-neutral modifier label uses Meta', () {
+    final meta = Standard64Layout.keys.singleWhere(
+      (key) => key.modifier == ModifierKey.leftMeta,
+    );
+    expect(meta.label, 'Meta');
+  });
 }

@@ -235,7 +235,7 @@ final class GrpcRemoteInputGateway implements RemoteInputGateway {
   final ValueNotifier<core.ConnectionStatus> _status = ValueNotifier(
     const core.ConnectionStatus(
       core.ConnectionPhase.disconnected,
-      message: '尚未配置被控端',
+      message: '尚未配置受控端',
     ),
   );
   ClientChannel? _channel;
@@ -293,7 +293,7 @@ final class GrpcRemoteInputGateway implements RemoteInputGateway {
       );
       if (_normalizeFingerprint(info.certificateSha256) !=
           profile.fingerprint) {
-        throw StateError('被控端返回的证书指纹与输入值不一致');
+        throw StateError('受控端返回的证书指纹与输入值不一致');
       }
       _setStatus(core.ConnectionPhase.authenticating, '正在校验 TOTP…');
       final challenge = await _client!.createPairingChallenge(
@@ -335,7 +335,7 @@ final class GrpcRemoteInputGateway implements RemoteInputGateway {
     required bool resetReconnectAttempt,
   }) async {
     if (!profile.isPaired) {
-      _setStatus(core.ConnectionPhase.pairingRequired, '需要输入被控端验证码');
+      _setStatus(core.ConnectionPhase.pairingRequired, '需要输入受控端验证码');
       return false;
     }
     final epoch = ++_connectionEpoch;
@@ -408,14 +408,14 @@ final class GrpcRemoteInputGateway implements RemoteInputGateway {
       },
       onDone: () {
         if (!connectionReady) {
-          openingError = StateError('被控端已关闭连接');
+          openingError = StateError('受控端已关闭连接');
           if (!hello.isCompleted) {
             hello.completeError(openingError!);
           }
           return;
         }
         if (epoch != _connectionEpoch || !_autoReconnect) return;
-        _failPending(StateError('被控端已关闭连接'));
+        _failPending(StateError('受控端已关闭连接'));
         _setStatus(core.ConnectionPhase.disconnected, '连接已断开');
         _scheduleReconnect(epoch);
       },
@@ -532,7 +532,7 @@ final class GrpcRemoteInputGateway implements RemoteInputGateway {
     Duration timeout = const Duration(seconds: 3),
   }) {
     if (!status.canSend || _outgoing == null) {
-      return Future.error(StateError('尚未连接被控端'));
+      return Future.error(StateError('尚未连接受控端'));
     }
     final id = const Uuid().v4();
     envelope
@@ -545,7 +545,7 @@ final class GrpcRemoteInputGateway implements RemoteInputGateway {
       timeout,
       onTimeout: () {
         _pending.remove(id);
-        throw TimeoutException('被控端未在期限内确认命令');
+        throw TimeoutException('受控端未在期限内确认命令');
       },
     );
   }

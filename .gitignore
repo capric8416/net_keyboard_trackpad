@@ -2,6 +2,7 @@
 .flutter-plugins
 .flutter-plugins-dependencies
 .idea/
+.DS_Store
 .metadata
 .pub-cache/
 .uv-cache/
@@ -15,5 +16,6 @@ coverage/
 .vscode/
 *.tar.xz
 native/
-apps/desktop_app/assets/
+apps/desktop_app/assets/*
+!apps/desktop_app/assets/tray_icon.png
 apps/mobile_app/assets/

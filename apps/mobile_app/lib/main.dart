@@ -9,5 +9,5 @@ Future<void> main() async {
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
-  runApp(const RemoteKeyboardApp());
+  runApp(const NetworkInputControllerApp());
 }

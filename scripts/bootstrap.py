@@ -32,23 +32,24 @@ def create_runners(flutter: str) -> None:
             )
         finally:
             (mobile / "pubspec.yaml").write_bytes(pubspec)
-    if not (desktop / "windows").is_dir():
-        pubspec = (desktop / "pubspec.yaml").read_bytes()
-        try:
-            run(
-                [
-                    flutter,
-                    "create",
-                    "--platforms=windows",
-                    "--org=com.netkeyboard",
-                    "--project-name=net_keyboard_desktop",
-                    "--no-pub",
-                    ".",
-                ],
-                cwd=desktop,
-            )
-        finally:
-            (desktop / "pubspec.yaml").write_bytes(pubspec)
+    for platform in ("windows", "macos"):
+        if not (desktop / platform).is_dir():
+            pubspec = (desktop / "pubspec.yaml").read_bytes()
+            try:
+                run(
+                    [
+                        flutter,
+                        "create",
+                        f"--platforms={platform}",
+                        "--org=com.netkeyboard",
+                        "--project-name=net_keyboard_desktop",
+                        "--no-pub",
+                        ".",
+                    ],
+                    cwd=desktop,
+                )
+            finally:
+                (desktop / "pubspec.yaml").write_bytes(pubspec)
 
 
 def parse_args() -> argparse.Namespace:
@@ -61,7 +62,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip-runners",
         action="store_true",
-        help="Do not generate missing Android and Windows runner files.",
+        help="Do not generate missing Android, Windows and macOS runner files.",
     )
     return parser.parse_args()
 
@@ -73,7 +74,7 @@ def main() -> None:
     executable("uv")
     executable("protoc")
 
-    run([flutter, "config", "--enable-android", "--enable-windows-desktop"])
+    run([flutter, "config", "--enable-android", "--enable-windows-desktop", "--enable-macos-desktop"])
     if not args.skip_runners:
         create_runners(flutter)
 

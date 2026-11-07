@@ -40,7 +40,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"net_keyboard_desktop", origin, size)) {
+  if (!window.Create(L"网络键鼠受控端", origin, size)) {
     if (instance_mutex != nullptr) {
       ::CloseHandle(instance_mutex);
     }
