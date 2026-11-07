@@ -249,6 +249,8 @@ final class GrpcRemoteInputGateway implements RemoteInputGateway {
   Timer? _reconnectTimer;
   int _reconnectAttempt = 0;
   bool _autoReconnect = false;
+  int _connectionEpoch = 0;
+  Completer<void>? _openingHello;
 
   @override
   core.ConnectionStatus get status => _status.value;
@@ -260,6 +262,9 @@ final class GrpcRemoteInputGateway implements RemoteInputGateway {
 
   Future<ServerProfile?> loadProfile() async {
     _profile = await _profileStore.loadActive();
+    if (_profile != null) {
+      _setStatus(core.ConnectionPhase.disconnected, '未连接');
+    }
     return _profile;
   }
 
@@ -322,15 +327,41 @@ final class GrpcRemoteInputGateway implements RemoteInputGateway {
     }
   }
 
-  Future<void> connect(ServerProfile profile) async {
+  Future<bool> connect(ServerProfile profile) =>
+      _connect(profile, resetReconnectAttempt: true);
+
+  Future<bool> _connect(
+    ServerProfile profile, {
+    required bool resetReconnectAttempt,
+  }) async {
     if (!profile.isPaired) {
       _setStatus(core.ConnectionPhase.pairingRequired, '需要输入被控端验证码');
-      return;
+      return false;
     }
-    await disconnect();
-    await _profileStore.setActive(profile.id);
+    final epoch = ++_connectionEpoch;
     _autoReconnect = true;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    await _closeTransport();
+    if (epoch != _connectionEpoch || !_autoReconnect) return false;
+    if (resetReconnectAttempt) _reconnectAttempt = 0;
     _profile = profile;
+    try {
+      final connected = await _openConnection(profile, epoch);
+      if (!connected) return false;
+      await _profileStore.setActive(profile.id);
+      return epoch == _connectionEpoch && status.canSend;
+    } on Object catch (error, stack) {
+      if (epoch != _connectionEpoch || !_autoReconnect) return false;
+      await _closeTransport();
+      if (epoch != _connectionEpoch || !_autoReconnect) return false;
+      _setStatus(core.ConnectionPhase.error, error.toString());
+      _scheduleReconnect(epoch);
+      Error.throwWithStackTrace(error, stack);
+    }
+  }
+
+  Future<bool> _openConnection(ServerProfile profile, int epoch) async {
     _setStatus(
       core.ConnectionPhase.tlsConnecting,
       '正在连接 ${profile.host}:${profile.port}',
@@ -346,9 +377,14 @@ final class GrpcRemoteInputGateway implements RemoteInputGateway {
     );
     final stream = _client!.control(_outgoing!.stream, options: options);
     final hello = Completer<void>();
+    var connectionReady = false;
+    Object? openingError;
+    StackTrace? openingStack;
+    _openingHello = hello;
     _responses = stream.listen(
       (response) {
         if (response.hasHello() && !hello.isCompleted) hello.complete();
+        if (epoch != _connectionEpoch) return;
         if (response.hasResult()) {
           final pending = _pending.remove(response.result.eventId);
           if (pending != null && !pending.isCompleted) {
@@ -359,15 +395,29 @@ final class GrpcRemoteInputGateway implements RemoteInputGateway {
         }
       },
       onError: (Object error, StackTrace stack) {
-        if (!hello.isCompleted) hello.completeError(error, stack);
+        if (!connectionReady) {
+          openingError = error;
+          openingStack = stack;
+          if (!hello.isCompleted) hello.completeError(error, stack);
+          return;
+        }
+        if (epoch != _connectionEpoch || !_autoReconnect) return;
         _failPending(error, stack);
         _setStatus(core.ConnectionPhase.error, error.toString());
-        _scheduleReconnect();
+        _scheduleReconnect(epoch);
       },
       onDone: () {
+        if (!connectionReady) {
+          openingError = StateError('被控端已关闭连接');
+          if (!hello.isCompleted) {
+            hello.completeError(openingError!);
+          }
+          return;
+        }
+        if (epoch != _connectionEpoch || !_autoReconnect) return;
         _failPending(StateError('被控端已关闭连接'));
         _setStatus(core.ConnectionPhase.disconnected, '连接已断开');
-        _scheduleReconnect();
+        _scheduleReconnect(epoch);
       },
     );
     _outgoing!.add(
@@ -389,13 +439,29 @@ final class GrpcRemoteInputGateway implements RemoteInputGateway {
         ),
       ),
     );
-    await hello.future.timeout(const Duration(seconds: 10));
+    try {
+      await hello.future.timeout(const Duration(seconds: 10));
+    } finally {
+      if (identical(_openingHello, hello)) _openingHello = null;
+    }
+    if (openingError != null) {
+      if (openingStack != null) {
+        Error.throwWithStackTrace(openingError!, openingStack!);
+      }
+      throw openingError!;
+    }
+    if (epoch != _connectionEpoch || !_autoReconnect) return false;
+    connectionReady = true;
     _setStatus(
       core.ConnectionPhase.connected,
       '已连接 ${profile.host}:${profile.port}',
     );
     _reconnectAttempt = 0;
-    _heartbeat = Timer.periodic(const Duration(seconds: 10), (_) {
+    _heartbeat = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (epoch != _connectionEpoch || !_autoReconnect) {
+        timer.cancel();
+        return;
+      }
       _outgoing?.add(
         protocol.ClientEnvelope(
           sequence: Int64(++_sequence),
@@ -406,6 +472,7 @@ final class GrpcRemoteInputGateway implements RemoteInputGateway {
         ),
       );
     });
+    return true;
   }
 
   Future<void> deleteProfile(ServerProfile profile) async {
@@ -485,38 +552,71 @@ final class GrpcRemoteInputGateway implements RemoteInputGateway {
 
   @override
   Future<void> disconnect() async {
+    final epoch = ++_connectionEpoch;
     _autoReconnect = false;
     _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _reconnectAttempt = 0;
+    await _closeTransport();
+    if (epoch == _connectionEpoch) {
+      _setStatus(core.ConnectionPhase.disconnected, '未连接');
+    }
+  }
+
+  Future<void> _closeTransport() async {
     _heartbeat?.cancel();
     _heartbeat = null;
-    await _outgoing?.close();
+    final hello = _openingHello;
+    _openingHello = null;
+    if (hello != null && !hello.isCompleted) {
+      hello.completeError(StateError('连接操作已取消'));
+    }
+    final outgoing = _outgoing;
     _outgoing = null;
-    await _responses?.cancel();
+    final responses = _responses;
     _responses = null;
-    await _channel?.shutdown();
+    final channel = _channel;
     _channel = null;
     _client = null;
     _sequence = 0;
     _failPending(StateError('连接已关闭'));
-    _setStatus(core.ConnectionPhase.disconnected, '未连接');
+    final closeOutgoing = outgoing?.close();
+    final cancelResponses = responses?.cancel();
+    final shutdownChannel = channel?.shutdown();
+    await Future.wait<void>([
+      _ignoreCleanupError(closeOutgoing),
+      _ignoreCleanupError(cancelResponses),
+      _ignoreCleanupError(shutdownChannel),
+    ]);
   }
 
-  void _scheduleReconnect() {
+  Future<void> _ignoreCleanupError(Future<dynamic>? operation) async {
+    try {
+      await operation;
+    } on Object {
+      // The local connection state was invalidated before cleanup started.
+    }
+  }
+
+  void _scheduleReconnect(int epoch) {
     final profile = _profile;
-    if (!_autoReconnect || profile == null || !profile.isPaired) return;
+    if (epoch != _connectionEpoch ||
+        !_autoReconnect ||
+        profile == null ||
+        !profile.isPaired) {
+      return;
+    }
     _reconnectTimer?.cancel();
     final delays = [1, 2, 4, 8, 15, 30];
     final seconds = delays[_reconnectAttempt.clamp(0, delays.length - 1)];
     _reconnectAttempt++;
     _setStatus(core.ConnectionPhase.backingOff, '$seconds 秒后重新连接…');
     _reconnectTimer = Timer(Duration(seconds: seconds), () async {
-      if (!_autoReconnect) return;
+      if (epoch != _connectionEpoch || !_autoReconnect) return;
       try {
-        await connect(profile);
-      } on Object catch (error) {
-        _setStatus(core.ConnectionPhase.error, error.toString());
-        _autoReconnect = true;
-        _scheduleReconnect();
+        await _connect(profile, resetReconnectAttempt: false);
+      } on Object {
+        // _connect updates the status and schedules the next retry.
       }
     });
   }

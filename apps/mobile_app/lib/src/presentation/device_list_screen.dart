@@ -52,12 +52,16 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       _error = null;
     });
     try {
-      await widget.gateway.connect(profile);
-      if (mounted) widget.onConnected();
+      final connected = await widget.gateway.connect(profile);
+      if (connected && mounted) widget.onConnected();
     } on Object catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted && widget.gateway.activeProfile?.id == profile.id) {
+        setState(() => _error = error.toString());
+      }
     } finally {
-      if (mounted) setState(() => _busyProfileId = null);
+      if (mounted && _busyProfileId == profile.id) {
+        setState(() => _busyProfileId = null);
+      }
     }
   }
 
@@ -205,31 +209,35 @@ class _DeviceCard extends StatelessWidget {
         ].join('\n'),
       ),
       isThreeLine: isActive,
-      trailing: busy
-          ? const SizedBox.square(
-              dimension: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (canDisconnect)
-                  TextButton(onPressed: onDisconnect, child: const Text('断开'))
-                else
-                  FilledButton.tonal(
-                    onPressed: onConnect,
-                    child: const Text('连接'),
-                  ),
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'delete') onDelete();
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'delete', child: Text('删除设备')),
-                  ],
-                ),
-              ],
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (busy)
+            const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             ),
+          if (canDisconnect)
+            TextButton(onPressed: onDisconnect, child: const Text('断开'))
+          else
+            FilledButton.tonal(
+              onPressed: busy ? null : onConnect,
+              child: const Text('连接'),
+            ),
+          PopupMenuButton<String>(
+            enabled: !busy,
+            onSelected: (value) {
+              if (value == 'delete') onDelete();
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'delete', child: Text('删除设备')),
+            ],
+          ),
+        ],
+      ),
     ),
   );
 }

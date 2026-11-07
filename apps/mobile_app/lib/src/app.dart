@@ -16,7 +16,7 @@ class _RemoteKeyboardAppState extends State<RemoteKeyboardApp> {
   late final GrpcRemoteInputGateway _gateway;
   late final KeyboardController _controller;
   bool _initializing = true;
-  bool _showDevices = false;
+  bool _showDevices = true;
 
   @override
   void initState() {
@@ -28,14 +28,7 @@ class _RemoteKeyboardAppState extends State<RemoteKeyboardApp> {
   }
 
   Future<void> _restore() async {
-    final profile = await _gateway.loadProfile();
-    if (profile != null && profile.isPaired) {
-      try {
-        await _gateway.connect(profile);
-      } on Object {
-        // The setup page shows the connection error and permits re-pairing.
-      }
-    }
+    await _gateway.loadProfile();
     if (mounted) setState(() => _initializing = false);
   }
 
