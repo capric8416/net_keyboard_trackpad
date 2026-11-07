@@ -1301,7 +1301,6 @@ class PointerInput extends $pb.GeneratedMessage {
     $core.int? wheelDelta,
     PointerButton? button,
     $core.bool? buttonDown,
-    SystemGesture? gesture,
     $core.int? horizontalWheelDelta,
   }) {
     final result = PointerInput._();
@@ -1310,7 +1309,6 @@ class PointerInput extends $pb.GeneratedMessage {
     if (wheelDelta != null) result.wheelDelta = wheelDelta;
     if (button != null) result.button = button;
     if (buttonDown != null) result.buttonDown = buttonDown;
-    if (gesture != null) result.gesture = gesture;
     if (horizontalWheelDelta != null)
       result.horizontalWheelDelta = horizontalWheelDelta;
     return result;
@@ -1335,8 +1333,6 @@ class PointerInput extends $pb.GeneratedMessage {
     ..aE<PointerButton>(4, _omitFieldNames ? '' : 'button',
         enumValues: PointerButton.values)
     ..aOB(5, _omitFieldNames ? '' : 'buttonDown')
-    ..aE<SystemGesture>(6, _omitFieldNames ? '' : 'gesture',
-        enumValues: SystemGesture.values)
     ..aI(7, _omitFieldNames ? '' : 'horizontalWheelDelta',
         fieldType: $pb.PbFieldType.OS3)
     ..hasRequiredFields = false;
@@ -1408,21 +1404,12 @@ class PointerInput extends $pb.GeneratedMessage {
   @$pb.TagNumber(5)
   void clearButtonDown() => $_clearField(5);
 
-  @$pb.TagNumber(6)
-  SystemGesture get gesture => $_getN(5);
-  @$pb.TagNumber(6)
-  set gesture(SystemGesture value) => $_setField(6, value);
-  @$pb.TagNumber(6)
-  $core.bool hasGesture() => $_has(5);
-  @$pb.TagNumber(6)
-  void clearGesture() => $_clearField(6);
-
   @$pb.TagNumber(7)
-  $core.int get horizontalWheelDelta => $_getIZ(6);
+  $core.int get horizontalWheelDelta => $_getIZ(5);
   @$pb.TagNumber(7)
-  set horizontalWheelDelta($core.int value) => $_setSignedInt32(6, value);
+  set horizontalWheelDelta($core.int value) => $_setSignedInt32(5, value);
   @$pb.TagNumber(7)
-  $core.bool hasHorizontalWheelDelta() => $_has(6);
+  $core.bool hasHorizontalWheelDelta() => $_has(5);
   @$pb.TagNumber(7)
   void clearHorizontalWheelDelta() => $_clearField(7);
 }

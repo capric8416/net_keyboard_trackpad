@@ -228,9 +228,6 @@ final class RemoteInputService extends protocol.RemoteInputServiceBase {
     }
     if (envelope.hasPointerInput()) {
       final pointer = envelope.pointerInput;
-      if (pointer.gesture != protocol.SystemGesture.SYSTEM_GESTURE_NONE) {
-        return _injectGesture(pointer.gesture);
-      }
       final button = switch (pointer.button) {
         protocol.PointerButton.POINTER_BUTTON_LEFT =>
           desktop.PointerButton.left,
@@ -252,34 +249,6 @@ final class RemoteInputService extends protocol.RemoteInputServiceBase {
     }
     throw ArgumentError('未知控制命令');
   }
-
-  int _injectGesture(protocol.SystemGesture gesture) => switch (gesture) {
-    protocol.SystemGesture.SYSTEM_GESTURE_ZOOM_IN => _input.injectKeyStroke(
-      const core.KeyStroke(key: core.SemanticKey.equal, modifierBits: 1 << 0),
-    ),
-    protocol.SystemGesture.SYSTEM_GESTURE_ZOOM_OUT => _input.injectKeyStroke(
-      const core.KeyStroke(key: core.SemanticKey.minus, modifierBits: 1 << 0),
-    ),
-    protocol.SystemGesture.SYSTEM_GESTURE_TASK_VIEW => _input.injectKeyStroke(
-      const core.KeyStroke(key: core.SemanticKey.tab, modifierBits: 1 << 6),
-    ),
-    protocol.SystemGesture.SYSTEM_GESTURE_SHOW_DESKTOP =>
-      _input.injectKeyStroke(
-        const core.KeyStroke(key: core.SemanticKey.keyD, modifierBits: 1 << 6),
-      ),
-    protocol.SystemGesture.SYSTEM_GESTURE_SWITCH_APP_NEXT =>
-      _input.injectKeyStroke(
-        const core.KeyStroke(key: core.SemanticKey.tab, modifierBits: 1 << 2),
-      ),
-    protocol.SystemGesture.SYSTEM_GESTURE_SWITCH_APP_PREVIOUS =>
-      _input.injectKeyStroke(
-        const core.KeyStroke(
-          key: core.SemanticKey.tab,
-          modifierBits: (1 << 2) | (1 << 4),
-        ),
-      ),
-    _ => 0,
-  };
 
   PairedDevice _authenticate(ServiceCall call) {
     final metadata = call.clientMetadata ?? const <String, String>{};

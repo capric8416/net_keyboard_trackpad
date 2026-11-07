@@ -12,3 +12,8 @@ build/
 coverage/
 *.iml
 
+.vscode/
+*.tar.xz
+native/
+apps/desktop_app/assets/
+apps/mobile_app/assets/

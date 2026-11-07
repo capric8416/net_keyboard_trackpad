@@ -39,41 +39,6 @@ class PointerButton extends $pb.ProtobufEnum {
   const PointerButton._(super.value, super.name);
 }
 
-class SystemGesture extends $pb.ProtobufEnum {
-  static const SystemGesture SYSTEM_GESTURE_NONE =
-      SystemGesture._(0, _omitEnumNames ? '' : 'SYSTEM_GESTURE_NONE');
-  static const SystemGesture SYSTEM_GESTURE_ZOOM_IN =
-      SystemGesture._(1, _omitEnumNames ? '' : 'SYSTEM_GESTURE_ZOOM_IN');
-  static const SystemGesture SYSTEM_GESTURE_ZOOM_OUT =
-      SystemGesture._(2, _omitEnumNames ? '' : 'SYSTEM_GESTURE_ZOOM_OUT');
-  static const SystemGesture SYSTEM_GESTURE_TASK_VIEW =
-      SystemGesture._(3, _omitEnumNames ? '' : 'SYSTEM_GESTURE_TASK_VIEW');
-  static const SystemGesture SYSTEM_GESTURE_SHOW_DESKTOP =
-      SystemGesture._(4, _omitEnumNames ? '' : 'SYSTEM_GESTURE_SHOW_DESKTOP');
-  static const SystemGesture SYSTEM_GESTURE_SWITCH_APP_NEXT = SystemGesture._(
-      5, _omitEnumNames ? '' : 'SYSTEM_GESTURE_SWITCH_APP_NEXT');
-  static const SystemGesture SYSTEM_GESTURE_SWITCH_APP_PREVIOUS =
-      SystemGesture._(
-          6, _omitEnumNames ? '' : 'SYSTEM_GESTURE_SWITCH_APP_PREVIOUS');
-
-  static const $core.List<SystemGesture> values = <SystemGesture>[
-    SYSTEM_GESTURE_NONE,
-    SYSTEM_GESTURE_ZOOM_IN,
-    SYSTEM_GESTURE_ZOOM_OUT,
-    SYSTEM_GESTURE_TASK_VIEW,
-    SYSTEM_GESTURE_SHOW_DESKTOP,
-    SYSTEM_GESTURE_SWITCH_APP_NEXT,
-    SYSTEM_GESTURE_SWITCH_APP_PREVIOUS,
-  ];
-
-  static final $core.List<SystemGesture?> _byValue =
-      $pb.ProtobufEnum.$_initByValueList(values, 6);
-  static SystemGesture? valueOf($core.int value) =>
-      value < 0 || value >= _byValue.length ? null : _byValue[value];
-
-  const SystemGesture._(super.value, super.name);
-}
-
 class Capability extends $pb.ProtobufEnum {
   static const Capability CAPABILITY_UNSPECIFIED =
       Capability._(0, _omitEnumNames ? '' : 'CAPABILITY_UNSPECIFIED');

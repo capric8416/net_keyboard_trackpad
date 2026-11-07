@@ -32,28 +32,6 @@ final $typed_data.Uint8List pointerButtonDescriptor = $convert.base64Decode(
     'RPTl9MRUZUEAESGAoUUE9JTlRFUl9CVVRUT05fUklHSFQQAhIZChVQT0lOVEVSX0JVVFRPTl9N'
     'SURETEUQAw==');
 
-@$core.Deprecated('Use systemGestureDescriptor instead')
-const SystemGesture$json = {
-  '1': 'SystemGesture',
-  '2': [
-    {'1': 'SYSTEM_GESTURE_NONE', '2': 0},
-    {'1': 'SYSTEM_GESTURE_ZOOM_IN', '2': 1},
-    {'1': 'SYSTEM_GESTURE_ZOOM_OUT', '2': 2},
-    {'1': 'SYSTEM_GESTURE_TASK_VIEW', '2': 3},
-    {'1': 'SYSTEM_GESTURE_SHOW_DESKTOP', '2': 4},
-    {'1': 'SYSTEM_GESTURE_SWITCH_APP_NEXT', '2': 5},
-    {'1': 'SYSTEM_GESTURE_SWITCH_APP_PREVIOUS', '2': 6},
-  ],
-};
-
-/// Descriptor for `SystemGesture`. Decode as a `google.protobuf.EnumDescriptorProto`.
-final $typed_data.Uint8List systemGestureDescriptor = $convert.base64Decode(
-    'Cg1TeXN0ZW1HZXN0dXJlEhcKE1NZU1RFTV9HRVNUVVJFX05PTkUQABIaChZTWVNURU1fR0VTVF'
-    'VSRV9aT09NX0lOEAESGwoXU1lTVEVNX0dFU1RVUkVfWk9PTV9PVVQQAhIcChhTWVNURU1fR0VT'
-    'VFVSRV9UQVNLX1ZJRVcQAxIfChtTWVNURU1fR0VTVFVSRV9TSE9XX0RFU0tUT1AQBBIiCh5TWV'
-    'NURU1fR0VTVFVSRV9TV0lUQ0hfQVBQX05FWFQQBRImCiJTWVNURU1fR0VTVFVSRV9TV0lUQ0hf'
-    'QVBQX1BSRVZJT1VTEAY=');
-
 @$core.Deprecated('Use capabilityDescriptor instead')
 const Capability$json = {
   '1': 'Capability',
@@ -676,14 +654,6 @@ const PointerInput$json = {
     },
     {'1': 'button_down', '3': 5, '4': 1, '5': 8, '10': 'buttonDown'},
     {
-      '1': 'gesture',
-      '3': 6,
-      '4': 1,
-      '5': 14,
-      '6': '.netkeyboard.v1.SystemGesture',
-      '10': 'gesture'
-    },
-    {
       '1': 'horizontal_wheel_delta',
       '3': 7,
       '4': 1,
@@ -698,9 +668,8 @@ final $typed_data.Uint8List pointerInputDescriptor = $convert.base64Decode(
     'CgxQb2ludGVySW5wdXQSFwoHZGVsdGFfeBgBIAEoEVIGZGVsdGFYEhcKB2RlbHRhX3kYAiABKB'
     'FSBmRlbHRhWRIfCgt3aGVlbF9kZWx0YRgDIAEoEVIKd2hlZWxEZWx0YRI1CgZidXR0b24YBCAB'
     'KA4yHS5uZXRrZXlib2FyZC52MS5Qb2ludGVyQnV0dG9uUgZidXR0b24SHwoLYnV0dG9uX2Rvd2'
-    '4YBSABKAhSCmJ1dHRvbkRvd24SNwoHZ2VzdHVyZRgGIAEoDjIdLm5ldGtleWJvYXJkLnYxLlN5'
-    'c3RlbUdlc3R1cmVSB2dlc3R1cmUSNAoWaG9yaXpvbnRhbF93aGVlbF9kZWx0YRgHIAEoEVIUaG'
-    '9yaXpvbnRhbFdoZWVsRGVsdGE=');
+    '4YBSABKAhSCmJ1dHRvbkRvd24SNAoWaG9yaXpvbnRhbF93aGVlbF9kZWx0YRgHIAEoEVIUaG9y'
+    'aXpvbnRhbFdoZWVsRGVsdGE=');
 
 @$core.Deprecated('Use pingDescriptor instead')
 const Ping$json = {

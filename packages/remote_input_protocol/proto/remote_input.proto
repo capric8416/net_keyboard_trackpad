@@ -109,7 +109,6 @@ message PointerInput {
   sint32 wheel_delta = 3;
   PointerButton button = 4;
   bool button_down = 5;
-  SystemGesture gesture = 6;
   sint32 horizontal_wheel_delta = 7;
 }
 
@@ -118,16 +117,6 @@ enum PointerButton {
   POINTER_BUTTON_LEFT = 1;
   POINTER_BUTTON_RIGHT = 2;
   POINTER_BUTTON_MIDDLE = 3;
-}
-
-enum SystemGesture {
-  SYSTEM_GESTURE_NONE = 0;
-  SYSTEM_GESTURE_ZOOM_IN = 1;
-  SYSTEM_GESTURE_ZOOM_OUT = 2;
-  SYSTEM_GESTURE_TASK_VIEW = 3;
-  SYSTEM_GESTURE_SHOW_DESKTOP = 4;
-  SYSTEM_GESTURE_SWITCH_APP_NEXT = 5;
-  SYSTEM_GESTURE_SWITCH_APP_PREVIOUS = 6;
 }
 
 message Ping {
