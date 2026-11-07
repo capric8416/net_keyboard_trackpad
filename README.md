@@ -241,6 +241,16 @@ uv run python scripts/build.py all --mode release --skip-pub-get
 
 `--skip-pub-get` 会同时向 Flutter 传递 `--no-pub`。Android 当前只支持 arm64，构建脚本固定传递 `--target-platform android-arm64`，避免生成不可运行的其他 ABI 产物。需要查看 Flutter 和 Gradle 的具体进度时增加 `--verbose`。
 
+## 生成应用图标
+
+项目根目录的 `icon.png` 是 Android 和 Windows 应用图标母版。替换母版后执行：
+
+```text
+uv run scripts/generate_icons.py
+```
+
+脚本使用 PEP 723 声明 Pillow 依赖，由 `uv` 自动创建隔离环境。它会生成 Android `mdpi`、`hdpi`、`xhdpi`、`xxhdpi`、`xxxhdpi` 五档 launcher PNG，并生成包含 16、20、24、32、40、48、64、128、256 像素图像帧的 Windows ICO。Android Manifest 和 Windows Runner 已分别引用生成的 `ic_launcher.png` 与 `app_icon.ico`。
+
 ## 本地调试运行
 
 先查看 Flutter 可用设备：
