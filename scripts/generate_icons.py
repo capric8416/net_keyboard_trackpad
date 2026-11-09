@@ -24,13 +24,17 @@ WINDOWS_ICON_SIZES = (16, 20, 24, 32, 40, 48, 64, 128, 256)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate Android, Windows and macOS application icons.",
+        description="Generate Android, Windows, macOS and Linux application icons.",
     )
     parser.add_argument(
         "--source",
         type=Path,
         default=PROJECT_ROOT / "icon.png",
         help="Square PNG source image (default: icon.png in the project root).",
+    )
+    parser.add_argument(
+        "--platform", choices=("all", "android", "windows", "macos", "linux"),
+        default="all", help="Generate icons only for the selected platform.",
     )
     return parser.parse_args()
 
@@ -96,14 +100,30 @@ def generate_macos_icons(source: Image.Image) -> None:
     source.resize((32, 32), Image.Resampling.LANCZOS).save(tray)
 
 
+def generate_linux_icons(source: Image.Image) -> None:
+    output = PROJECT_ROOT / "apps/desktop_app/linux/runner/resources/app_icon.png"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    source.resize((256, 256), Image.Resampling.LANCZOS).save(output)
+    tray = PROJECT_ROOT / "apps/desktop_app/assets/tray_icon.png"
+    tray.parent.mkdir(parents=True, exist_ok=True)
+    source.resize((32, 32), Image.Resampling.LANCZOS).save(tray)
+    print(f"Linux 256x256 and tray 32x32: {output.relative_to(PROJECT_ROOT)}")
+
+
 def main() -> None:
     args = parse_args()
     source_path = args.source.resolve()
     source = load_source(source_path)
     print(f"Source {source.width}x{source.height}: {source_path}")
-    generate_android_icons(source)
-    generate_windows_icon(source)
-    generate_macos_icons(source)
+    generators = {
+        "android": generate_android_icons,
+        "windows": generate_windows_icon,
+        "macos": generate_macos_icons,
+        "linux": generate_linux_icons,
+    }
+    for platform, generate in generators.items():
+        if args.platform in ("all", platform):
+            generate(source)
 
 
 if __name__ == "__main__":

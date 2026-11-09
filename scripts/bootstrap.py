@@ -32,7 +32,7 @@ def create_runners(flutter: str) -> None:
             )
         finally:
             (mobile / "pubspec.yaml").write_bytes(pubspec)
-    for platform in ("windows", "macos"):
+    for platform in ("windows", "macos", "linux"):
         if not (desktop / platform).is_dir():
             pubspec = (desktop / "pubspec.yaml").read_bytes()
             try:
@@ -62,7 +62,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip-runners",
         action="store_true",
-        help="Do not generate missing Android, Windows and macOS runner files.",
+        help="Do not generate missing Android, Windows, macOS and Linux runner files.",
     )
     return parser.parse_args()
 
@@ -74,7 +74,7 @@ def main() -> None:
     executable("uv")
     executable("protoc")
 
-    run([flutter, "config", "--enable-android", "--enable-windows-desktop", "--enable-macos-desktop"])
+    run([flutter, "config", "--enable-android", "--enable-windows-desktop", "--enable-macos-desktop", "--enable-linux-desktop"])
     if not args.skip_runners:
         create_runners(flutter)
 

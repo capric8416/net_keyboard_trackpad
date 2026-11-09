@@ -8,6 +8,7 @@ import 'package:grpc/grpc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'macos_input_injector.dart';
+import 'linux_input_injector.dart';
 import '../security/server_identity.dart';
 import '../security/totp.dart';
 import '../server/remote_input_service.dart';
@@ -47,6 +48,9 @@ final class ControlledDeviceController extends ChangeNotifier {
   Future<void> initialize() async {
     try {
       await checkAccessibility();
+      if (Platform.isLinux && !await LinuxInputInjector().isAvailable()) {
+        throw StateError('Linux 输入需要 X11 会话及 XTEST 扩展；不支持 Wayland。');
+      }
       final preferences = await SharedPreferences.getInstance();
       _port = preferences.getInt('listen_port') ?? 39091;
       _interfaces = await NetworkInterface.list(
@@ -58,7 +62,11 @@ final class ControlledDeviceController extends ChangeNotifier {
       final service = RemoteInputService(
         identity: _identity!,
         identityStore: store,
-        input: Platform.isMacOS ? MacOSInputInjector() : WindowsInputInjector(),
+        input: Platform.isLinux
+            ? LinuxInputInjector()
+            : Platform.isMacOS
+            ? MacOSInputInjector()
+            : WindowsInputInjector(),
         onConnectionChanged: (connected, peerAddress) {
           _connectedDevice = connected ? peerAddress : null;
           _status = connected ? '已连接：$peerAddress' : '等待连接';

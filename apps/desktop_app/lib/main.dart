@@ -10,18 +10,29 @@ import 'src/application/desktop_controller.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
-  windowManager.addListener(_CloseToTray());
+
   final controller = ControlledDeviceController();
   await controller.initialize();
-  await _Tray(controller).initialize();
+  bool trayReady = false;
+  try {
+    trayReady = await _Tray(controller).initialize();
+  } on PlatformException {
+    // Keep the status and error page accessible without a working tray host.
+  }
   const options = WindowOptions(
     size: Size(640, 620),
     center: true,
     title: '网络键鼠受控端',
   );
   await windowManager.waitUntilReadyToShow(options, () async {
-    await windowManager.setPreventClose(true);
-    await windowManager.hide();
+    await windowManager.setPreventClose(trayReady);
+    if (trayReady) {
+      windowManager.addListener(_CloseToTray());
+      await windowManager.hide();
+    } else {
+      await windowManager.show();
+      await windowManager.focus();
+    }
   });
   runApp(NetworkInputControlledApp(controller: controller));
 }
@@ -31,14 +42,15 @@ class _Tray {
   final ControlledDeviceController controller;
   final SystemTray tray = SystemTray();
 
-  Future<void> initialize() async {
-    await tray.initSystemTray(
+  Future<bool> initialize() async {
+    final ready = await tray.initSystemTray(
       title: '网络键鼠受控端',
-      iconPath: Platform.isMacOS
+      iconPath: !Platform.isWindows
           ? 'assets/tray_icon.png'
           : 'windows/runner/resources/app_icon.ico',
       toolTip: '网络键鼠受控端：${controller.status}，端口 ${controller.port}',
     );
+    if (!ready) return false;
     final menu = Menu();
     await menu.buildFrom([
       MenuItemLabel(label: '打开状态窗口', onClicked: (_) => _show()),
@@ -49,7 +61,11 @@ class _Tray {
         onClicked: (_) async {
           await controller.shutdown();
           await tray.destroy();
-          await windowManager.destroy();
+          // GTK window destruction removes Flutter's implicit view while its
+          // engine is still running. Let process exit release it on Linux.
+          if (!Platform.isLinux) {
+            await windowManager.destroy();
+          }
           exit(0);
         },
       ),
@@ -57,10 +73,12 @@ class _Tray {
     await tray.setContextMenu(menu);
     tray.registerSystemTrayEventHandler((eventName) {
       if (eventName == kSystemTrayEventClick ||
-          eventName == kSystemTrayEventDoubleClick)
+          eventName == kSystemTrayEventDoubleClick) {
         _show();
+      }
       if (eventName == kSystemTrayEventRightClick) tray.popUpContextMenu();
     });
+    return true;
   }
 
   Future<void> _show() async {

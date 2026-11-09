@@ -2,14 +2,14 @@
 
 局域网远程输入工具，由“网络键鼠控制端”和“网络键鼠受控端”组成。控制端提供触控键盘、语音输入和触控板，并通过 gRPC 将输入发送到受控端；受控端常驻后台，将命令注入当前激活窗口。
 
-当前控制端支持 Android，计划扩展 iOS；当前受控端支持 Windows 和 macOS，计划扩展 Linux。产品范围、协议、安全约束和完整任务列表见 [`plan.md`](plan.md)。平台无关流程包含 TLS gRPC、TOTP 首次配对、控制会话、64 键键盘、右侧多点触控板、FunASR 录音/FFI 和语音结果确认；输入注入由各受控平台分别实现。
+当前控制端支持 Android，计划扩展 iOS；当前受控端支持 Windows、macOS 和 Linux（X11）。产品范围、协议、安全约束和完整任务列表见 [`plan.md`](plan.md)。平台无关流程包含 TLS gRPC、TOTP 首次配对、控制会话、64 键键盘、右侧多点触控板、FunASR 录音/FFI 和语音结果确认；输入注入由各受控平台分别实现。
 
 ## 角色与平台
 
 | 产品角色 | 当前平台 | 计划平台 | 仓库应用 |
 | --- | --- | --- | --- |
 | 网络键鼠控制端 | Android | iOS | `apps/mobile_app` |
-| 网络键鼠受控端 | Windows、macOS | Linux | `apps/desktop_app` |
+| 网络键鼠受控端 | Windows、macOS、Linux（X11） | Wayland | `apps/desktop_app` |
 
 通用产品说明、界面和协议展示名只使用“控制端”和“受控端”。系统名称仅用于构建步骤、平台实现及操作系统限制。
 
@@ -124,8 +124,8 @@ uv run python scripts/bootstrap.py
 该命令会依次：
 
 1. 检查 `flutter`、`dart`、`uv` 和 `protoc`；
-2. 启用 Flutter Android、Windows 与 macOS desktop target；
-3. 为缺失的平台生成 `apps/mobile_app/android` 、`apps/desktop_app/windows` 和 `apps/desktop_app/macos` runner；
+2. 启用 Flutter Android、Windows、macOS 与 Linux desktop target；
+3. 为缺失的平台生成 `apps/mobile_app/android` 、`apps/desktop_app/windows` 、`apps/desktop_app/macos` 和 `apps/desktop_app/linux` runner；
 4. 安装固定版本的 `protoc_plugin`；
 5. 在 workspace 根目录执行 `flutter pub get`；
 6. 从 `remote_input.proto` 生成 Dart protobuf/gRPC 源码；
@@ -272,6 +272,35 @@ macOS 使用 Core Graphics 注入事件，凭据保存在 macOS Keychain（不�
 
 手工验收：控制端配对 macOS 受控端，在 TextEdit、浏览器输入框与 Terminal 中检查普通键、左右修饰键、Command+C/V、中文/emoji、单击/双击/右键、双轴滚动；撤销辅助功能权限后确认命令失败，再授权恢复；关闭窗口、重复启动、断网重连和退出后端口释放也需验收。
 
+## 在 Linux（openSUSE Leap，X11）构建受控端
+
+Linux runner 使用 GTK 3、X11/XTEST；只支持当前用户的 X11 图形会话。通过 `echo $XDG_SESSION_TYPE` 确认为 `x11`。Wayland（含 XWayland）不支持，请从登录界面选择 X11 会话。
+
+openSUSE Leap 16.1 构建依赖（需要已启用仓库提供这些包）：
+
+```text
+sudo zypper install clang cmake ninja pkg-config gtk3-devel libstdc++-devel libX11-devel libXtst-devel libsecret-devel libappindicator3-devel
+flutter doctor -v
+uv run python scripts/bootstrap.py --skip-doctor
+uv run python scripts/build.py linux --mode release
+```
+
+若仓库找不到 AppIndicator 包，使用 `zypper search -s appindicator` 查找提供 `appindicator3-0.1` 或 `ayatana-appindicator3-0.1` 的开发包；当前 system_tray 插件构建需要其中一个 pkg-config 模块。凭据通过 flutter_secure_storage 保存在 Secret Service；桌面必须提供并解锁 Secret Service（如 GNOME Keyring，或启用 Secret Service 的 KWallet），缺失时身份初始化会失败，不会退回明文保存。
+
+产物位于 `apps/desktop_app/build/linux/x64/release/bundle/`（ARM64 为 `arm64`）；分发整个 bundle。运行：
+
+```text
+apps/desktop_app/build/linux/x64/release/bundle/net_keyboard_desktop
+```
+
+本地调试在 `apps/desktop_app` 执行 `flutter run -d linux`。启动后通过托盘打开状态窗口，关闭窗口继续监听，再次运行会打开已有实例；桌面面板需支持 AppIndicator/System Tray。托盘初始化失败时保留可见窗口。需要开机启动时可在桌面“自动启动”设置中添加 bundle 中可执行文件的绝对路径。
+
+键盘支持左右 Ctrl/Alt/Shift/Super（Meta）、F1–F12、导航键、Print Screen 和 Menu；普通键按当前 X11 键盘映射解析。触控板支持相对移动、三键及双轴滚动（累计每 120 协议单位发送一格）。Unicode 文本（中文、emoji 等）写入系统剪贴板后用 Shift+Insert 粘贴，**会替换 CLIPBOARD 和 PRIMARY selection 内容**（兼容终端的 Shift+Insert）。目标应用需支持 Shift+Insert；终端可能弹出多行粘贴确认。ACK 表示事件已提交，不能确认目标应用是否消费。不要在确认语音文本与完成粘贴之间切换焦点。
+
+在受信任局域网内按需放行 firewalld 的 TCP 39091（或配置端口），不要关闭整个防火墙。登录/锁屏、其他用户会话、Wayland、受保护窗口和游戏独占输入不在支持范围。
+
+手工验收：从 Android 配对后，在文本编辑器、浏览器输入框和终端检查普通键、左右修饰键、Ctrl+C/V、中文/emoji、单击/双击/右键及横纵滚动；检查窗口关闭、重复启动、重连、退出释放端口和重启后凭据恢复。当前仓库中的自动检查不能替代 Leap 16.1 真机端到端验收。
+
 ## 同时编译控制端和受控端
 
 在 Windows 上安装好 Android 和 Windows 两套 toolchain 后可以执行：
@@ -280,7 +309,7 @@ macOS 使用 Core Graphics 注入事件，凭据保存在 macOS Keychain（不�
 uv run python scripts/build.py all --mode release --android-format apk
 ```
 
-`all` 在 Windows 构建 Android+Windows，在 macOS 构建 Android+macOS。
+`all` 在 Windows 构建 Android+Windows，在 macOS 构建 Android+macOS，在 Linux 构建 Android+Linux（仍需 Android toolchain 和 FunASR 产物）。
 
 `build.py` 默认先执行 `flutter pub get` 和 protobuf 生成，再编译目标。依赖和协议代码已经确认没有变化时可以减少重复工作：
 
@@ -291,6 +320,8 @@ uv run python scripts/build.py all --mode release --skip-pub-get
 `--skip-pub-get` 会同时向 Flutter 传递 `--no-pub`。Android 当前只支持 arm64，构建脚本固定传递 `--target-platform android-arm64`，避免生成不可运行的其他 ABI 产物。需要查看 Flutter 和 Gradle 的具体进度时增加 `--verbose`。
 
 ## 生成应用图标
+
+Linux 窗口和任务栏图标由 `linux/runner/resources/app_icon.png` 通过 GResource 嵌入可执行文件，托盘使用共享的 `assets/tray_icon.png`。仅更新 Linux 图标可执行 `uv run scripts/generate_icons.py --platform linux`，随后重新构建并退出旧进程、启动新 bundle。
 
 项目根目录的 `icon.png` 是控制端和受控端的应用图标母版。替换母版后执行：
 
@@ -368,6 +399,12 @@ remote_input_core validation passed: 64 unique keys
 Windows mapping validation passed: 76 keys, 8 modifiers
 ```
 
+Linux 原生输入回归（需 clang++、GTK/X11/XTEST 开发包和 Xvfb；隔离显示，不操作当前桌面）：
+
+```text
+uv run python scripts/test_linux_input.py
+```
+
 Python 工具语法检查：
 
 ```text
@@ -424,7 +461,7 @@ dart pub global activate protoc_plugin 25.1.0
 
 `bootstrap.py` 会自动尝试把 Dart global pub cache 的 `bin` 目录加入当前子进程的 `PATH`。如果手工执行 `protoc`，则需要自行把该目录加入终端 `PATH`。
 
-### Flutter 缺少 Android、Windows 或 macOS runner
+### Flutter 缺少 Android、Windows、macOS 或 Linux runner
 
 重新执行：
 

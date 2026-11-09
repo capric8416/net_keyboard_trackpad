@@ -1,4 +1,4 @@
-"""Build Android and Windows/macOS release artifacts with one cross-platform CLI."""
+"""Build Android and Windows/macOS/Linux release artifacts with one cross-platform CLI."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "target",
-        choices=("android", "windows", "macos", "all"),
+        choices=("android", "windows", "macos", "linux", "all"),
         help="Application target to build.",
     )
     parser.add_argument(
@@ -53,13 +53,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    desktop_target = "macos" if sys.platform == "darwin" else "windows"
+    desktop_target = {"darwin": "macos", "win32": "windows"}.get(sys.platform, "linux")
     if args.target == "windows" and sys.platform != "win32":
         raise SystemExit("The Windows Flutter target must be built on Windows.")
     if args.target == "macos" and sys.platform != "darwin":
         raise SystemExit("The macOS Flutter target must be built on macOS.")
-    if args.target == "all" and sys.platform not in ("darwin", "win32"):
-        raise SystemExit("The all target requires Windows or macOS.")
+    if args.target == "linux" and not sys.platform.startswith("linux"):
+        raise SystemExit("The Linux Flutter target must be built on Linux.")
+    if args.target == "all" and sys.platform not in ("darwin", "win32", "linux"):
+        raise SystemExit("The all target requires Windows, macOS or Linux.")
     flutter = executable("flutter")
     executable("protoc")
     os.environ.update(environment_with_pub_cache_bin())
@@ -86,7 +88,7 @@ def main() -> None:
             command,
             cwd=ROOT / "apps" / "mobile_app",
         )
-    if args.target in ("windows", "macos", "all"):
+    if args.target in ("windows", "macos", "linux", "all"):
         target = desktop_target if args.target == "all" else args.target
         command = [flutter]
         if args.verbose:

@@ -1,8 +1,8 @@
 # 网络键鼠控制端与受控端实施规划
 
-> 文档状态：实现中；macOS 受控端已接入，真机验收待完成
+> 文档状态：实现中；macOS 与 Linux X11 受控端已接入，真机验收待完成
 > 控制端：当前支持 Android，计划扩展 iOS
-> 受控端：当前支持 Windows、macOS，计划扩展 Linux
+> 受控端：当前支持 Windows、macOS、Linux（X11）
 > 实施原则：产品、协议和通用流程使用角色名称；系统名称只用于平台实现、构建和限制说明。
 
 ## 1. 产品目标
@@ -47,7 +47,7 @@
 
 ### 2.2 v1 明确不做
 
-- iOS、Linux 的可运行产物。
+- iOS、Linux Wayland 的可运行产物。
 - 系统输入法（IME）或悬浮键盘；控制端是独立前台应用。
 - Windows 登录界面、锁屏、UAC 安全桌面中的输入。
 - 对管理员权限应用的默认输入保证。
@@ -62,7 +62,7 @@
 ### 2.3 后续扩展方向
 
 - 控制端的 `mobile_app` 增加 iOS runner，复用 UI、连接、协议和语音抽象层；另行提供 iOS 可用的本地语音识别原生构建。
-- 受控端的 `desktop_app` 增加 Linux runner，实现托盘、凭据存储和输入注入。
+- Linux Wayland 输入后端；当前 Linux runner 已实现 X11/XTEST、托盘及 Secret Service 凭据存储。
 - 受控端输入能力通过平台接口扩展，协议中的语义键码保持不变。
 - 多设备配对与控制权租约、鼠标/触控板、服务发现可作为独立版本演进，不影响 v1 的键盘消息。
 
@@ -446,7 +446,7 @@ message ServerEnvelope {
 1. 生成稳定的 `server_id`。
 2. 生成自签名 TLS 证书和私钥，证书包含 server id；记录 SHA-256 指纹。
 3. 生成至少 160 bit 随机 TOTP secret。
-4. 使用平台安全存储保护私钥、TOTP secret 和配对 token 数据；Windows 使用 DPAPI，macOS 使用 Keychain，Linux 实现需选用系统凭据服务。
+4. 使用平台安全存储保护私钥、TOTP secret 和配对 token 数据；Windows 使用 DPAPI，macOS 使用 Keychain，Linux 使用 Secret Service（需桌面提供并解锁）。
 5. 状态页常驻显示当前 6 位安全码；新增设备仍须通过证书指纹固定、短时 challenge、TOTP 校验和失败限流。
 
 ### 8.3 首次配对流程
@@ -917,3 +917,17 @@ Exit Criteria：干净的控制端与受控端设备可按文档安装并完成�
 注入失败沿用 `INPUT_BLOCKED`，无前台目标沿用 `NO_FOREGROUND_TARGET`。macOS `CGEvent.post` 没有事件接收数量返回值，`injected_event_count` 只表示已提交的事件数量，不能保证目标应用处理成功。Secure Input、锁屏、登录界面和系统保护窗口不在保证范围。普通键受当前输入法影响；语音文本仅在控制端用户确认时发送到受控端当前窗口。
 
 实现依据：[Apple CGEvent](https://developer.apple.com/documentation/coregraphics/cgevent) 和 [Unicode 事件](https://developer.apple.com/documentation/coregraphics/cgevent/keyboardsetunicodestring(stringlength:unicodestring:))。旧阶段清单是历史规划，未勾选项不表示本次已经验收。
+
+## 21. Linux X11 受控端实现与验收
+
+- [x] GTK Linux runner、单实例激活和托盘 PNG；复用 TLS、TOTP、配对与会话服务。
+- [x] XTEST 原子按键（76 个语义键、8 个修饰键），相对鼠标、三键及双轴滚动。
+- [x] 中文/emoji 使用剪贴板与 Shift+Insert；替换 CLIPBOARD 与 PRIMARY，目标需支持粘贴。
+- [x] 凭据复用 flutter_secure_storage Linux Secret Service，不使用明文回退。
+- [x] bootstrap/build 增加 linux；README 提供 openSUSE Leap X11 依赖与交付说明。
+- [x] 隔离 Xvfb 原生回归：76 键映射、8 修饰键、组合键顺序、Unicode 双 selection、鼠标/滚轮、Wayland 与无焦点拒绝；现有 10 项 Flutter 回归通过。
+- [ ] openSUSE Leap 16.1 X11 真机：配对、编辑器/浏览器/终端输入、权限/凭据服务失败、托盘与重复启动、重连、退出。
+
+Wayland/XWayland 会话明确返回 INPUT_BLOCKED；不保证锁屏和登录界面。文本粘贴沿用控制端明确确认流程。ACK 仅表示 XTEST 事件提交，不保证目标应用消费；小额滚轮增量在原生端累计，未满一格时可返回零事件成功。
+
+Linux Release 已成功构建，产物仅打包到项目内 bundle；窗口和任务栏图标通过 GResource 嵌入，Linux 退出流程避免提前销毁 Flutter 隐式视图。原生 runner/输入桥编译检查、修改的 Dart 文件静态分析及 Python 语法检查通过。用户已确认 Android 可以连接 Linux；完整输入与生命周期真机验收仍待完成。全仓库 analyze 仍有既有 lint 与 Android 模型 assets 缺失告警。
