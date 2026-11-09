@@ -1,0 +1,314 @@
+name: Build and publish release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.47.9"
+  UV_VERSION: "0.13.7"
+  PROTOC_VERSION: "31.1"
+  PROTOC_PLUGIN_VERSION: "25.1.0"
+  ANDROID_NDK_VERSION: "29.0.14206865"
+  ANDROID_CMAKE_VERSION: "4.1.2"
+  MODEL_ARCHIVE_URL: https://github.com/${{ github.repository }}/releases/download/models/net-keyboard-trackpad-models.tar.xz
+  ANDROID_NATIVE_ARCHIVE_URL: https://github.com/${{ github.repository }}/releases/download/natives/native-android-arm64-v8a.tar.xz
+  ANDROID_NATIVE_CHECKSUM_URL: https://github.com/${{ github.repository }}/releases/download/natives/native-android-arm64-v8a.tar.xz.sha256
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  build-linux-android:
+    name: Linux x64 and Android arm64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            clang cmake ninja-build pkg-config xz-utils \
+            libgtk-3-dev libayatana-appindicator3-dev libsecret-1-dev \
+            libx11-dev libxtst-dev libxkbcommon-dev libxkbcommon-x11-dev
+
+      - name: Setup mise, Python, uv and CMake
+        run: |
+          curl https://mise.run | sh
+          export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+          mise use -g python@3.12
+          mise use -g "uv@${UV_VERSION}"
+          mise use -g "cmake@${ANDROID_CMAKE_VERSION}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/share/mise/shims" >> "$GITHUB_PATH"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Setup protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: ${{ env.PROTOC_VERSION }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
+
+      - name: Install Android NDK and CMake
+        run: |
+          sdkmanager \
+            "ndk;${ANDROID_NDK_VERSION}" \
+            "cmake;${ANDROID_CMAKE_VERSION}"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Setup workspace tools
+        run: |
+          uv sync --frozen
+          dart pub global activate protoc_plugin "${PROTOC_PLUGIN_VERSION}"
+
+      - name: Download pinned models and Android native dependencies
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/release-inputs" apps/mobile_app/assets
+          curl --fail --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            "$MODEL_ARCHIVE_URL" \
+            --output "$RUNNER_TEMP/release-inputs/models.tar.xz"
+          curl --fail --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            "$ANDROID_NATIVE_ARCHIVE_URL" \
+            --output "$RUNNER_TEMP/release-inputs/native-android-arm64-v8a.tar.xz"
+          curl --fail --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            "$ANDROID_NATIVE_CHECKSUM_URL" \
+            --output "$RUNNER_TEMP/release-inputs/native-android-arm64-v8a.tar.xz.sha256"
+          cd "$RUNNER_TEMP/release-inputs"
+          sha256sum --check native-android-arm64-v8a.tar.xz.sha256
+          cd "$GITHUB_WORKSPACE"
+          tar -xJf "$RUNNER_TEMP/release-inputs/models.tar.xz" \
+            -C apps/mobile_app/assets
+          tar -xJf "$RUNNER_TEMP/release-inputs/native-android-arm64-v8a.tar.xz" -C .
+          test -s apps/mobile_app/assets/speech/manifest.json
+          test -s apps/mobile_app/assets/speech/funasr-paraformer-zh/model_quant.onnx
+          test -s apps/mobile_app/assets/speech/funasr-fsmn-vad/model_quant.onnx
+          test -s native/asr/vendor/android-arm64-v8a/lib/libzh_speech_deps.a
+
+      - name: Verify downloaded mobile dependencies
+        run: uv run python scripts/verify_speech_assets.py --require-android-native
+
+      - name: Build Android and Linux applications
+        run: uv run python scripts/build.py all --mode release --android-format apk
+
+      - name: Verify and package artifacts
+        run: |
+          apk="apps/mobile_app/build/app/outputs/flutter-apk/app-release.apk"
+          linux_bundle="apps/desktop_app/build/linux/x64/release/bundle"
+          test -s "$apk"
+          unzip -l "$apk" | grep -F "lib/arm64-v8a/libnet_keyboard_asr.so"
+          test -x "$linux_bundle/net_keyboard_desktop"
+          mkdir -p release
+          cp "$apk" release/net-keyboard-trackpad-android-arm64.apk
+          tar -czf release/net-keyboard-trackpad-linux-x64.tar.gz \
+            -C "$linux_bundle" .
+
+      - name: Upload Linux and Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-android
+          path: release/*
+          if-no-files-found: error
+
+  build-windows:
+    name: Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup mise, Python, uv and CMake
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "mise-windows-x64.zip"
+          $install = Join-Path $env:RUNNER_TEMP "mise-bin"
+          $data = Join-Path $env:RUNNER_TEMP "mise-data"
+          Invoke-WebRequest -UseBasicParsing `
+            -Uri "https://github.com/jdx/mise/releases/download/v2026.9.5/mise-v2026.9.5-windows-x64.zip" `
+            -OutFile $archive
+          if (Test-Path $install) { Remove-Item -Recurse -Force $install }
+          Expand-Archive -Path $archive -DestinationPath $install -Force
+          $mise = (Get-ChildItem $install -Recurse -File -Filter "mise.exe" |
+            Select-Object -First 1).FullName
+          if (-not $mise) { throw "mise.exe was not found in the downloaded archive" }
+          $miseDir = Split-Path $mise -Parent
+          $env:MISE_DATA_DIR = $data
+          $env:Path = "$data\shims;$miseDir;$env:Path"
+          & $mise use -g python@3.12
+          & $mise use -g "uv@$env:UV_VERSION"
+          & $mise use -g "cmake@$env:ANDROID_CMAKE_VERSION"
+          Add-Content $env:GITHUB_ENV "MISE_DATA_DIR=$data"
+          Add-Content $env:GITHUB_PATH "$miseDir"
+          Add-Content $env:GITHUB_PATH "$data\shims"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Setup protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: ${{ env.PROTOC_VERSION }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup workspace tools
+        shell: pwsh
+        run: |
+          uv sync --frozen
+          dart pub global activate protoc_plugin $env:PROTOC_PLUGIN_VERSION
+
+      - name: Build Windows application
+        shell: pwsh
+        run: uv run python scripts/build.py windows --mode release
+
+      - name: Package Windows artifact
+        shell: pwsh
+        run: |
+          $bundle = "apps/desktop_app/build/windows/x64/runner/Release"
+          if (-not (Test-Path "$bundle/net_keyboard_desktop.exe")) {
+            throw "Windows executable is missing"
+          }
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Compress-Archive -Path "$bundle/*" `
+            -DestinationPath release/net-keyboard-trackpad-windows-x64.zip `
+            -Force
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: release/*
+          if-no-files-found: error
+
+  build-apple:
+    name: macOS and unsigned iOS
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup mise, Python, uv and CMake
+        run: |
+          curl https://mise.run | sh
+          export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+          mise use -g python@3.12
+          mise use -g "uv@${UV_VERSION}"
+          mise use -g "cmake@${ANDROID_CMAKE_VERSION}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/share/mise/shims" >> "$GITHUB_PATH"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Setup protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: ${{ env.PROTOC_VERSION }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup workspace tools
+        run: |
+          uv sync --frozen
+          dart pub global activate protoc_plugin "${PROTOC_PLUGIN_VERSION}"
+
+      - name: Download pinned speech models
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p apps/mobile_app/assets
+          curl --fail --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            "$MODEL_ARCHIVE_URL" \
+            --output "$RUNNER_TEMP/models.tar.xz"
+          tar -xJf "$RUNNER_TEMP/models.tar.xz" -C apps/mobile_app/assets
+          test -s apps/mobile_app/assets/speech/manifest.json
+          test -s apps/mobile_app/assets/speech/funasr-paraformer-zh/model_quant.onnx
+
+      - name: Verify downloaded speech models
+        run: uv run python scripts/verify_speech_assets.py
+
+      - name: Build macOS application
+        run: uv run python scripts/build.py macos --mode release
+
+      - name: Build unsigned iOS application
+        run: uv run python scripts/build.py ios --mode release --skip-pub-get
+
+      - name: Package Apple artifacts
+        run: |
+          mac_app="apps/desktop_app/build/macos/Build/Products/Release/net_keyboard_desktop.app"
+          ios_app="apps/mobile_app/build/ios/iphoneos/Runner.app"
+          test -d "$mac_app"
+          test -d "$ios_app"
+          mkdir -p release
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$mac_app" \
+            "release/net-keyboard-trackpad-macos-${RUNNER_ARCH}.zip"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$ios_app" \
+            release/net-keyboard-trackpad-ios-arm64-unsigned.zip
+
+      - name: Upload Apple artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple
+          path: release/*
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - build-linux-android
+      - build-windows
+      - build-apple
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download application artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: release/*

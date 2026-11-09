@@ -962,3 +962,13 @@ Linux Release 已成功构建，产物仅打包到项目内 bundle；窗口和�
 - [ ] 将 Android FunASR 模型从 iOS asset bundle 拆出，降低 iOS 安装包体积。
 
 iOS runner 最低系统版本为 15.0。项目不上传录音；系统语音请求被限制为设备端识别。模拟器不作为设备端语音、权限或性能验收依据。默认 `build.py ios` 使用 `--no-codesign`，因此成功构建只证明 Dart、插件和 Swift/Xcode 链路可编译，不代表产物可直接安装或发布。
+
+## 24. GitHub Actions 原生依赖与应用发布
+
+- [x] 手动 workflow 在 Ubuntu 构建、链接校验并打包 Android arm64-v8a FunASR/ONNX Runtime native archive。
+- [x] native archive 与 SHA-256 更新到当前仓库固定的 `natives` prerelease；iOS 使用系统 Speech，不创建无效的 iOS native job。
+- [x] tag `v*` 并行构建 Windows、macOS、Linux、Android 和未签名 iOS 应用。
+- [x] Android/iOS 模型从当前仓库 `models` Release 的固定资产下载；Android native 从 `natives` Release 下载，干净 checkout 不依赖开发机忽略目录。
+- [x] 五个平台 workflow artifacts 汇总后才创建 tag 对应的 GitHub Release，任一构建失败则不发布。
+- [ ] 在 GitHub 仓库创建 `models` Release 并上传约定布局的模型压缩包。
+- [ ] 配置 Android release keystore、Apple 签名/公证与 App Store 发布流程；当前 iOS Release 资产保持明确的 unsigned 标记。

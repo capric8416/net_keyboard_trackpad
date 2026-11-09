@@ -1,0 +1,98 @@
+name: Build Android native dependencies
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  ANDROID_NDK_VERSION: "29.0.14206865"
+  CMAKE_VERSION: "4.1.2"
+  UV_VERSION: "0.13.7"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  build-android-native:
+    name: Android arm64-v8a
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install host build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential clang git ninja-build xz-utils
+
+      - name: Setup mise, Python, uv and CMake
+        run: |
+          curl https://mise.run | sh
+          export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+          mise use -g python@3.12
+          mise use -g "uv@${UV_VERSION}"
+          mise use -g "cmake@${CMAKE_VERSION}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/share/mise/shims" >> "$GITHUB_PATH"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
+
+      - name: Install Android NDK
+        run: |
+          sdkmanager "ndk;${ANDROID_NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Setup pinned Python tools
+        run: uv sync --frozen
+
+      - name: Cache native source and build trees
+        uses: actions/cache@v4
+        with:
+          path: |
+            .native-build/android-arm64-v8a
+            native/asr/vendor/android-arm64-v8a
+          key: android-native-${{ env.ANDROID_NDK_VERSION }}-${{ hashFiles('scripts/build_funasr_android.py', 'native/asr/**') }}
+
+      - name: Build and validate FunASR dependencies
+        run: uv run python scripts/build_funasr_android.py
+
+      - name: Package native archive
+        run: |
+          mkdir -p release
+          test -s native/asr/vendor/android-arm64-v8a/lib/libzh_speech_deps.a
+          test -s native/asr/vendor/android-arm64-v8a/native-dependencies.json
+          tar -cJf release/native-android-arm64-v8a.tar.xz \
+            native/asr/vendor/android-arm64-v8a
+          cd release
+          sha256sum native-android-arm64-v8a.tar.xz \
+            > native-android-arm64-v8a.tar.xz.sha256
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-native
+          path: release/*
+          if-no-files-found: error
+
+      - name: Publish native dependency release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: natives
+          target_commitish: ${{ github.sha }}
+          name: Native dependencies
+          body: Reproducible Android arm64-v8a FunASR and ONNX Runtime dependencies. This release is updated by the manual native build workflow.
+          prerelease: true
+          make_latest: false
+          fail_on_unmatched_files: true
+          files: release/*

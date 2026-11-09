@@ -505,6 +505,39 @@ uv run python scripts/build.py --mode release android --android-format apk
 - 保留模型许可证和第三方 notices；
 - 不把临时下载文件或开发机绝对路径写入发行物。
 
+## GitHub Actions 构建与发布
+
+仓库包含两组 workflow：
+
+- `Build Android native dependencies` 仅支持手动运行，在 Ubuntu 上从固定 commit 构建并验证 Android arm64-v8a 的 FunASR/ONNX Runtime 静态依赖，然后更新当前仓库的 `natives` prerelease，上传 `native-android-arm64-v8a.tar.xz` 和 SHA-256 文件。iOS 使用系统 Speech framework，不需要也不发布 iOS native archive。
+- `Build and publish release` 由 `v*` tag 触发，并行构建 Windows x64、macOS、Linux x64、Android arm64 APK 和未签名 iOS arm64 `.app`，全部成功后创建对应 tag 的 GitHub Release 并上传五个平台产物。
+
+应用 Release workflow 不依赖开发机中被忽略的模型和 native 目录，而是从当前 GitHub 仓库下载两个固定 Release 资产：
+
+```text
+models/net-keyboard-trackpad-models.tar.xz
+natives/native-android-arm64-v8a.tar.xz
+```
+
+模型压缩包必须在解压后产生 `speech/` 目录，因此可按以下布局制作并上传到当前仓库的 `models` Release：
+
+```text
+net-keyboard-trackpad-models.tar.xz
+└─ speech/
+   ├─ manifest.json
+   ├─ funasr-paraformer-zh/
+   └─ funasr-fsmn-vad/
+```
+
+创建本地模型资产后，可从仓库根目录打包：
+
+```text
+tar -cJf net-keyboard-trackpad-models.tar.xz \
+  -C apps/mobile_app/assets speech
+```
+
+首次发布顺序：先创建 `models` Release 并上传模型压缩包，再手动运行 native workflow 生成 `natives` Release，最后推送版本 tag，例如 `v0.1.0`。Android 当前构建配置未提供独立 release keystore 时会使用开发签名；正式分发前仍需配置持久的 Android release keystore。iOS workflow 产物明确标记为 `unsigned`，安装或 App Store 发布需要另行签名；macOS 跨机器公开分发仍需 Developer ID 签名和公证。
+
 ## 常见问题
 
 ### 无法访问 pub.dev

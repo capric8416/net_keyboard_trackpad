@@ -15,7 +15,8 @@ coverage/
 
 .vscode/
 *.tar.xz
-native/
+native/asr/vendor/
+native/net_keyboard_trackpad_natives.tar.xz
 apps/desktop_app/assets/*
 !apps/desktop_app/assets/tray_icon.png
 apps/mobile_app/assets/
