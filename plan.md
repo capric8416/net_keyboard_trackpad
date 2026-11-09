@@ -1,7 +1,7 @@
 # 网络键鼠控制端与受控端实施规划
 
-> 文档状态：实现中；macOS、Linux X11 与 Wayland portal 受控端已接入，真机验收待完成
-> 控制端：当前支持 Android，计划扩展 iOS
+> 文档状态：实现中；iOS 控制端及 macOS、Linux X11、Wayland portal 受控端已接入，真机验收待完成
+> 控制端：当前支持 Android、iOS
 > 受控端：当前支持 Windows、macOS、Linux（X11 / Wayland portal）
 > 实施原则：产品、协议和通用流程使用角色名称；系统名称只用于平台实现、构建和限制说明。
 
@@ -29,8 +29,9 @@
   - 布局中出现的 Ctrl、Alt、Shift、Meta 修饰键具有可切换状态和明确视觉反馈。
   - IP/主机名、端口、设备名称、证书指纹、配对凭据的保存与管理。
   - 首次配对、自动重连、连接状态、错误反馈。
-  - 本地麦克风录音、本地 FunASR 离线识别、最终文本提交。
-  - 当前 Android 实现包含运行时麦克风权限处理。
+  - 本地麦克风录音、平台本地语音识别、最终文本提交。
+  - Android 使用 FunASR 离线识别；iOS 使用强制设备端执行的 Speech framework。
+  - Android 与 iOS 实现均包含运行时麦克风权限处理；iOS 额外请求语音识别与本地网络权限。
   - 键盘左侧主区域与右侧触控板组合布局。
   - 触控板支持光标移动、单击、双击、双指轻点右键及双指横纵滚动。
 - 受控端：
@@ -47,7 +48,7 @@
 
 ### 2.2 v1 明确不做
 
-- iOS、缺少 RemoteDesktop portal 的 Wayland 桌面产物。
+- 缺少 RemoteDesktop portal 的 Wayland 桌面产物。
 - 系统输入法（IME）或悬浮键盘；控制端是独立前台应用。
 - Windows 登录界面、锁屏、UAC 安全桌面中的输入。
 - 对管理员权限应用的默认输入保证。
@@ -61,7 +62,7 @@
 
 ### 2.3 后续扩展方向
 
-- 控制端的 `mobile_app` 增加 iOS runner，复用 UI、连接、协议和语音抽象层；另行提供 iOS 可用的本地语音识别原生构建。
+- 控制端继续扩展设备端语音语言、平台资源拆包和 iOS 签名发行流程。
 - 其他 Linux 桌面后端；当前已实现 X11/XTEST、Wayland RemoteDesktop portal、托盘及 Secret Service 凭据存储。
 - 受控端输入能力通过平台接口扩展，协议中的语义键码保持不变。
 - 多设备配对与控制权租约、鼠标/触控板、服务发现可作为独立版本演进，不影响 v1 的键盘消息。
@@ -161,7 +162,7 @@
 ├─ Connection & pairing controller
 ├─ gRPC client + TLS certificate pinning
 ├─ Recorder (mono WAV)
-├─ FunASR Dart FFI facade
+├─ 平台本地语音识别 facade
 │  └─ 平台本地 ASR bridge + ONNX Runtime
 └─ Secure profile storage
              │
@@ -236,12 +237,13 @@ net_keyboard_trackpad/
 | Windows 凭据 | DPAPI（CurrentUser）封装 | 保存 TLS 私钥、TOTP secret、配对令牌哈希 |
 | Android 录音 | `record` | 录制单声道 PCM WAV；参考工程已使用该路径 |
 | Android ASR | FunASR Paraformer quantized ONNX + FSMN VAD，经 C ABI/FFI | 本地、离线、非流式首版 |
+| iOS ASR | Speech framework + `requiresOnDeviceRecognition` | 设备端中文识别，不回退云端 |
 | 后台推理 | 独立 Dart isolate 调用 native FFI | 避免阻塞 Flutter UI isolate |
 | Windows 输入 | 自有 Flutter Windows 插件调用 Win32 `SendInput` | 插件返回实际注入数量和错误；方便未来提供其他平台实现 |
 | Windows 托盘 | 成熟的 Flutter tray 插件，外加窗口生命周期管理 | 依赖须在初始化阶段做最小原型验证 |
 | 日志 | 结构化滚动文件 + 控制台 debug sink | 生产默认 info，保留最近若干文件并设总大小上限 |
 
-## 6. FunASR 方案
+## 6. Android FunASR 方案
 
 ### 6.1 参考工程核查结果
 
@@ -944,3 +946,19 @@ Linux Release 已成功构建，产物仅打包到项目内 bundle；窗口和�
 - [ ] openSUSE Leap 16.1 / KDE Plasma 6 Wayland 真机：系统授权对话框、原生 Wayland 与 XWayland 应用、左右修饰键、中文/emoji、多行终端粘贴、撤销后重新授权、重连、退出。
 
 运行时需要 xdg-desktop-portal 和桌面 RemoteDesktop 后端；目标环境已安装 xdg-desktop-portal-kde6。Wayland 文本依赖 Clipboard portal，替换 CLIPBOARD，不修改 PRIMARY；默认不持久化授权。ACK 只表示 portal 事件提交，不代表目标应用消费。Windows/macOS 原生输入后端保持不变。
+
+## 23. iOS 控制端实现与验收
+
+- [x] 增加 Flutter iOS runner，复用设备列表、TLS 指纹固定、TOTP 配对、控制流、键盘和多点触控板。
+- [x] Keychain 安全存储沿用 `flutter_secure_storage`，不新增共享 Keychain entitlement。
+- [x] 增加本地网络、麦克风和语音识别用途说明及运行时授权流程。
+- [x] iOS 语音使用 Speech framework 文件识别，并强制 `requiresOnDeviceRecognition`；设备不支持离线中文时明确失败，不回退云端。
+- [x] 识别文本沿用审阅状态机，只有用户点击“确认输入”后才发送 `TextInput`。
+- [x] bootstrap、build 和 icons 脚本增加 iOS；默认生成未签名 `.app`，可显式启用 Xcode codesign。
+- [x] 未签名 iPhoneOS Debug 构建通过，应用显示名和 iPhone/iPad/App Store 图标已配置。
+- [ ] iPhone/iPad 真机：本地网络授权、配对、自动重连、键盘、触控板、前后台切换和 Keychain 恢复。
+- [ ] 真机中文设备端语音：首次授权、拒绝/撤销、无语音、取消、确认、离线模式和不支持设备错误。
+- [ ] 配置唯一 Bundle Identifier、Development Team，完成签名安装、Release/IPA 和干净设备验收。
+- [ ] 将 Android FunASR 模型从 iOS asset bundle 拆出，降低 iOS 安装包体积。
+
+iOS runner 最低系统版本为 15.0。项目不上传录音；系统语音请求被限制为设备端识别。模拟器不作为设备端语音、权限或性能验收依据。默认 `build.py ios` 使用 `--no-codesign`，因此成功构建只证明 Dart、插件和 Swift/Xcode 链路可编译，不代表产物可直接安装或发布。

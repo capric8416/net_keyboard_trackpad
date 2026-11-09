@@ -19,13 +19,22 @@ typedef _RecognizeNative =
 typedef _RecognizeDart =
     int Function(Pointer<Void>, Pointer<Utf8>, Pointer<Utf8>, int);
 
-final class FunAsrService {
+final class LocalSpeechService {
+  static const _iosSpeech = MethodChannel('net_keyboard/speech');
   final AudioRecorder _recorder = AudioRecorder();
   String? _recordingPath;
   _AsrWorker? _worker;
   Map<String, String>? _modelHashes;
 
   Future<void> startRecording() async {
+    if (Platform.isIOS) {
+      final authorized = await _iosSpeech.invokeMethod<bool>(
+        'ensureAuthorized',
+      );
+      if (authorized != true) {
+        throw StateError('没有语音识别权限，请在系统设置中允许语音识别');
+      }
+    }
     if (!await _recorder.hasPermission()) {
       throw StateError('没有麦克风权限，请在系统设置中允许录音');
     }
@@ -48,13 +57,26 @@ final class FunAsrService {
     _recordingPath = null;
     if (path == null) throw StateError('没有可识别的录音');
     try {
-      if (_worker == null) {
-        final models = await _prepareModels();
-        _worker = await _AsrWorker.start(models.$1, models.$2);
+      final String text;
+      if (Platform.isIOS) {
+        text =
+            await _iosSpeech.invokeMethod<String>('recognizeFile', {
+              'path': path,
+              'locale': 'zh-CN',
+            }) ??
+            '';
+      } else if (Platform.isAndroid) {
+        if (_worker == null) {
+          final models = await _prepareModels();
+          _worker = await _AsrWorker.start(models.$1, models.$2);
+        }
+        text = await _worker!.recognize(path);
+      } else {
+        throw UnsupportedError('当前控制端平台不支持语音识别');
       }
-      final text = (await _worker!.recognize(path)).trim();
-      if (text.isEmpty) throw StateError('没有识别到语音');
-      return text;
+      final trimmed = text.trim();
+      if (trimmed.isEmpty) throw StateError('没有识别到语音');
+      return trimmed;
     } finally {
       File(path).delete().ignore();
     }
@@ -122,7 +144,8 @@ final class FunAsrService {
       var valid = false;
       if (await file.exists() && await file.length() == data.lengthInBytes) {
         valid =
-            (await sha256.bind(file.openRead()).first).toString() == expectedHash;
+            (await sha256.bind(file.openRead()).first).toString() ==
+            expectedHash;
       }
       if (!valid) {
         await file.parent.create(recursive: true);
@@ -130,7 +153,8 @@ final class FunAsrService {
           data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
           flush: true,
         );
-        final actualHash = (await sha256.bind(file.openRead()).first).toString();
+        final actualHash = (await sha256.bind(file.openRead()).first)
+            .toString();
         if (actualHash != expectedHash) {
           await file.delete();
           throw StateError('FunASR 模型校验失败：$manifestKey');

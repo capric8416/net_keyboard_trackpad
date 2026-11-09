@@ -24,7 +24,7 @@ WINDOWS_ICON_SIZES = (16, 20, 24, 32, 40, 48, 64, 128, 256)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate Android, Windows, macOS and Linux application icons.",
+        description="Generate Android, iOS, Windows, macOS and Linux application icons.",
     )
     parser.add_argument(
         "--source",
@@ -33,8 +33,10 @@ def parse_args() -> argparse.Namespace:
         help="Square PNG source image (default: icon.png in the project root).",
     )
     parser.add_argument(
-        "--platform", choices=("all", "android", "windows", "macos", "linux"),
-        default="all", help="Generate icons only for the selected platform.",
+        "--platform",
+        choices=("all", "android", "ios", "windows", "macos", "linux"),
+        default="all",
+        help="Generate icons only for the selected platform.",
     )
     return parser.parse_args()
 
@@ -60,6 +62,59 @@ def generate_android_icons(source: Image.Image) -> None:
             optimize=True,
         )
         print(f"Android {size}x{size}: {output.relative_to(PROJECT_ROOT)}")
+
+
+def generate_ios_icons(source: Image.Image) -> None:
+    import json
+
+    # App Store icons must not contain an alpha channel. Preserve the rounded
+    # source artwork while filling its transparent corners with a dark navy
+    # background that matches the icon palette.
+    ios_source = Image.new("RGB", source.size, (3, 10, 38))
+    ios_source.paste(source, mask=source.getchannel("A"))
+    output = (
+        PROJECT_ROOT
+        / "apps/mobile_app/ios/Runner/Assets.xcassets/AppIcon.appiconset"
+    )
+    output.mkdir(parents=True, exist_ok=True)
+    images = []
+    entries = (
+        ("iphone", 20, (2, 3)),
+        ("iphone", 29, (1, 2, 3)),
+        ("iphone", 40, (2, 3)),
+        ("iphone", 60, (2, 3)),
+        ("ipad", 20, (1, 2)),
+        ("ipad", 29, (1, 2)),
+        ("ipad", 40, (1, 2)),
+        ("ipad", 76, (1, 2)),
+        ("ipad", 83.5, (2,)),
+    )
+    for idiom, size, scales in entries:
+        for scale in scales:
+            pixels = round(size * scale)
+            size_label = f"{size:g}x{size:g}"
+            name = f"Icon-App-{size:g}x{size:g}@{scale}x.png"
+            ios_source.resize((pixels, pixels), Image.Resampling.LANCZOS).save(
+                output / name
+            )
+            images.append({
+                "idiom": idiom,
+                "size": size_label,
+                "scale": f"{scale}x",
+                "filename": name,
+            })
+    ios_source.resize((1024, 1024), Image.Resampling.LANCZOS).save(
+        output / "Icon-App-1024x1024@1x.png"
+    )
+    images.append({
+        "idiom": "ios-marketing",
+        "size": "1024x1024",
+        "scale": "1x",
+        "filename": "Icon-App-1024x1024@1x.png",
+    })
+    (output / "Contents.json").write_text(json.dumps({"images": images,
+        "info": {"author": "xcode", "version": 1}}, indent=2) + "\n")
+    print(f"iOS AppIcon: {output.relative_to(PROJECT_ROOT)}")
 
 
 def generate_windows_icon(source: Image.Image) -> None:
@@ -117,6 +172,7 @@ def main() -> None:
     print(f"Source {source.width}x{source.height}: {source_path}")
     generators = {
         "android": generate_android_icons,
+        "ios": generate_ios_icons,
         "windows": generate_windows_icon,
         "macos": generate_macos_icons,
         "linux": generate_linux_icons,

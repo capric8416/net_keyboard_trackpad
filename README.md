@@ -2,13 +2,13 @@
 
 局域网远程输入工具，由“网络键鼠控制端”和“网络键鼠受控端”组成。控制端提供触控键盘、语音输入和触控板，并通过 gRPC 将输入发送到受控端；受控端常驻后台，将命令注入当前激活窗口。
 
-当前控制端支持 Android，计划扩展 iOS；当前受控端支持 Windows、macOS 和 Linux（X11 / Wayland portal）。产品范围、协议、安全约束和完整任务列表见 [`plan.md`](plan.md)。平台无关流程包含 TLS gRPC、TOTP 首次配对、控制会话、64 键键盘、右侧多点触控板、FunASR 录音/FFI 和语音结果确认；输入注入由各受控平台分别实现。
+当前控制端支持 Android 和 iOS；当前受控端支持 Windows、macOS 和 Linux（X11 / Wayland portal）。产品范围、协议、安全约束和完整任务列表见 [`plan.md`](plan.md)。平台无关流程包含 TLS gRPC、TOTP 首次配对、控制会话、64 键键盘、右侧多点触控板、本地语音识别和结果确认；输入注入与语音识别由各平台分别实现。
 
 ## 角色与平台
 
 | 产品角色 | 当前平台 | 计划平台 | 仓库应用 |
 | --- | --- | --- | --- |
-| 网络键鼠控制端 | Android | iOS | `apps/mobile_app` |
+| 网络键鼠控制端 | Android、iOS | 其他移动平台 | `apps/mobile_app` |
 | 网络键鼠受控端 | Windows、macOS、Linux（X11 / Wayland portal） | 其他桌面后端 | `apps/desktop_app` |
 
 通用产品说明、界面和协议展示名只使用“控制端”和“受控端”。系统名称仅用于构建步骤、平台实现及操作系统限制。
@@ -87,6 +87,10 @@ flutter doctor --android-licenses
 
 必须至少连接一台 arm64 Android 真机验证 FunASR。模拟器可用于普通 UI 开发，但只有在提供相应 ABI 的原生 FunASR 库后才能运行语音识别。
 
+### iOS 构建环境
+
+iOS 控制端只能在 macOS 上构建。安装并首次启动 Xcode，接受许可证并安装 Xcode Command Line Tools；同时安装 CocoaPods。执行 `flutter doctor -v`，确认 `Xcode - develop for iOS and macOS` 可用。未签名构建不需要 Apple Developer 账号；安装到真机或发布时，需要在 `apps/mobile_app/ios/Runner.xcworkspace` 中为 Runner 配置唯一 Bundle Identifier 和 Development Team。
+
 ### Windows 构建环境
 
 Windows 受控端必须在 Windows 上编译。安装 Visual Studio 2022，并选择工作负载 `Desktop development with C++`，同时确保包含：
@@ -124,8 +128,8 @@ uv run python scripts/bootstrap.py
 该命令会依次：
 
 1. 检查 `flutter`、`dart`、`uv` 和 `protoc`；
-2. 启用 Flutter Android、Windows、macOS 与 Linux desktop target；
-3. 为缺失的平台生成 `apps/mobile_app/android` 、`apps/desktop_app/windows` 、`apps/desktop_app/macos` 和 `apps/desktop_app/linux` runner；
+2. 启用 Flutter Android、iOS、Windows、macOS 与 Linux target；
+3. 为缺失的平台生成 `apps/mobile_app/android`、`apps/mobile_app/ios`、`apps/desktop_app/windows`、`apps/desktop_app/macos` 和 `apps/desktop_app/linux` runner；
 4. 安装固定版本的 `protoc_plugin`；
 5. 在 workspace 根目录执行 `flutter pub get`；
 6. 从 `remote_input.proto` 生成 Dart protobuf/gRPC 源码；
@@ -205,6 +209,32 @@ uv run python scripts/build.py android --mode debug --android-format apk
 Debug 产物位于 `apps/mobile_app/build/app/outputs/flutter-apk/`。
 
 正式发布前需要在 `apps/mobile_app/android` 配置独立的 release keystore。密钥、密码和签名配置不得提交到仓库。
+
+## 在 iOS 构建控制端
+
+iOS 构建必须在 macOS 上执行。默认生成无需开发者证书的未签名应用：
+
+```text
+uv run python scripts/build.py ios --mode release
+```
+
+Release 产物位于 `apps/mobile_app/build/ios/iphoneos/Runner.app`。未签名 `.app` 用于编译验证，不能直接安装到普通真机或提交 App Store。
+
+配置 Runner 的 Development Team、Bundle Identifier 和签名能力后，可以让构建脚本调用 Xcode 签名：
+
+```text
+uv run python scripts/build.py ios --mode release --ios-codesign
+```
+
+Debug 构建：
+
+```text
+uv run python scripts/build.py ios --mode debug
+```
+
+iOS 首次使用会请求本地网络、麦克风和语音识别权限。键盘、触控板、TLS 配对和安全存储复用控制端通用实现；语音使用 iOS 设备端中文语音识别，并禁止自动回退到云端。模拟器可验证 UI 和连接流程，权限、设备端语音和真机安装必须在 iPhone/iPad 上验收。
+
+当前 Android FunASR 模型仍由共享 Flutter asset bundle 声明，因此也会进入 iOS 包但不会在 iOS 加载，导致安装包偏大；后续应拆分平台资源包。
 
 ## 在 Windows 构建受控端
 
@@ -335,7 +365,7 @@ journalctl --user -b -u xdg-desktop-portal.service -u plasma-xdg-desktop-portal-
 uv run python scripts/build.py all --mode release --android-format apk
 ```
 
-`all` 在 Windows 构建 Android+Windows，在 macOS 构建 Android+macOS，在 Linux 构建 Android+Linux（仍需 Android toolchain 和 FunASR 产物）。
+`all` 在 Windows 构建 Android+Windows，在 macOS 构建 Android+iOS+macOS，在 Linux 构建 Android+Linux。使用 `all` 仍需该宿主上对应的全部 toolchain；只构建 iOS 时不需要 Android SDK。
 
 `build.py` 默认先执行 `flutter pub get` 和 protobuf 生成，再编译目标。依赖和协议代码已经确认没有变化时可以减少重复工作：
 
@@ -355,7 +385,7 @@ Linux 窗口和任务栏图标由 `linux/runner/resources/app_icon.png` 通过 G
 uv run scripts/generate_icons.py
 ```
 
-脚本使用 PEP 723 声明 Pillow 依赖，由 `uv` 自动创建隔离环境。它还会生成 macOS AppIcon 和菜单栏 PNG，并生成 Android `mdpi`、`hdpi`、`xhdpi`、`xxhdpi`、`xxxhdpi` 五档 launcher PNG，并生成包含 16、20、24、32、40、48、64、128、256 像素图像帧的 Windows ICO。Android Manifest 和 Windows Runner 已分别引用生成的 `ic_launcher.png` 与 `app_icon.ico`。
+脚本使用 PEP 723 声明 Pillow 依赖，由 `uv` 自动创建隔离环境。它会生成 Android launcher PNG、iPhone/iPad/App Store AppIcon、macOS AppIcon 和菜单栏 PNG、Windows 多尺寸 ICO，以及 Linux 窗口和托盘 PNG。
 
 ## 本地调试运行
 
@@ -370,6 +400,13 @@ Android：
 ```text
 cd apps/mobile_app
 flutter run -d <android-device-id>
+```
+
+iOS：
+
+```text
+cd apps/mobile_app
+flutter run -d <ios-device-id>
 ```
 
 Windows：
@@ -396,7 +433,7 @@ flutter run -d macos
 4. 配对成功后长期随机令牌保存到两端系统安全存储。控制端启动时只显示受控端列表，由用户选择要连接的设备。
 5. 键盘页点击“受控端”可查看全部已保存的受控端，并可切换连接、主动断开、删除或添加；主动断开会立即取消连接尝试、退避计时和旧连接回调，不会再次自动重连。
 6. 左侧键盘发送普通键和保持选中的组合键；右侧触控板支持单指移动光标、单击、双击、双指轻点右键，以及双指垂直/水平滚动。
-7. 长按语音按钮录音，松开后由本地 FunASR 识别；结果只在点击“确认输入”后注入受控端当前激活窗口。
+7. 长按语音按钮录音，松开后由平台本地语音后端识别（Android 为 FunASR，iOS 为设备端 Speech framework）；结果只在点击“确认输入”后注入受控端当前激活窗口。
 
 控制端切换网络后，旧控制流如果没有立即收到 TCP 断开通知，受控端会在 35 秒内因心跳超时主动释放旧会话，之后控制端可自动重连。
 
@@ -409,6 +446,7 @@ flutter analyze
 flutter test packages/remote_input_core
 flutter test packages/desktop_input_windows
 flutter test apps/desktop_app
+flutter test apps/mobile_app
 ```
 
 不依赖 pub.dev 包的核心校验可以直接执行：
@@ -437,7 +475,7 @@ Python 工具语法检查：
 uv run python -m compileall -q scripts
 ```
 
-## FunASR 模型与原生库
+## Android FunASR 模型与原生库
 
 FunASR 接入参考 `D:\sources\zh-lang-textbook\app` 的 Android C ABI、后台 isolate 和模型提取方式。首次构建 Android 前准备模型和 arm64 原生静态库：
 
@@ -487,7 +525,7 @@ dart pub global activate protoc_plugin 25.1.0
 
 `bootstrap.py` 会自动尝试把 Dart global pub cache 的 `bin` 目录加入当前子进程的 `PATH`。如果手工执行 `protoc`，则需要自行把该目录加入终端 `PATH`。
 
-### Flutter 缺少 Android、Windows、macOS 或 Linux runner
+### Flutter 缺少 Android、iOS、Windows、macOS 或 Linux runner
 
 重新执行：
 
@@ -496,6 +534,10 @@ uv run python scripts/bootstrap.py --skip-doctor
 ```
 
 脚本只生成缺失的 runner，并保留现有 app `pubspec.yaml`。
+
+### iOS 无法安装未签名 Runner.app
+
+默认 iOS 构建使用 `--no-codesign`，只用于验证编译。使用 Xcode 打开 `apps/mobile_app/ios/Runner.xcworkspace`，在 Runner 的 Signing & Capabilities 中选择 Development Team 并设置唯一 Bundle Identifier，然后运行 `uv run python scripts/build.py ios --mode release --ios-codesign`，或直接从 Xcode/Flutter 调试真机。
 
 ### Windows build 找不到 Visual Studio
 

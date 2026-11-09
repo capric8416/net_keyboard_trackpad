@@ -15,23 +15,24 @@ PROTOC_PLUGIN_VERSION = "25.1.0"
 def create_runners(flutter: str) -> None:
     mobile = ROOT / "apps" / "mobile_app"
     desktop = ROOT / "apps" / "desktop_app"
-    if not (mobile / "android").is_dir():
-        pubspec = (mobile / "pubspec.yaml").read_bytes()
-        try:
-            run(
-                [
-                    flutter,
-                    "create",
-                    "--platforms=android",
-                    "--org=com.netkeyboard",
-                    "--project-name=net_keyboard_mobile",
-                    "--no-pub",
-                    ".",
-                ],
-                cwd=mobile,
-            )
-        finally:
-            (mobile / "pubspec.yaml").write_bytes(pubspec)
+    for platform in ("android", "ios"):
+        if not (mobile / platform).is_dir():
+            pubspec = (mobile / "pubspec.yaml").read_bytes()
+            try:
+                run(
+                    [
+                        flutter,
+                        "create",
+                        f"--platforms={platform}",
+                        "--org=com.netkeyboard",
+                        "--project-name=net_keyboard_mobile",
+                        "--no-pub",
+                        ".",
+                    ],
+                    cwd=mobile,
+                )
+            finally:
+                (mobile / "pubspec.yaml").write_bytes(pubspec)
     for platform in ("windows", "macos", "linux"):
         if not (desktop / platform).is_dir():
             pubspec = (desktop / "pubspec.yaml").read_bytes()
@@ -62,7 +63,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip-runners",
         action="store_true",
-        help="Do not generate missing Android, Windows, macOS and Linux runner files.",
+        help="Do not generate missing Android, iOS, Windows, macOS and Linux runner files.",
     )
     return parser.parse_args()
 
@@ -74,7 +75,17 @@ def main() -> None:
     executable("uv")
     executable("protoc")
 
-    run([flutter, "config", "--enable-android", "--enable-windows-desktop", "--enable-macos-desktop", "--enable-linux-desktop"])
+    run(
+        [
+            flutter,
+            "config",
+            "--enable-android",
+            "--enable-ios",
+            "--enable-windows-desktop",
+            "--enable-macos-desktop",
+            "--enable-linux-desktop",
+        ]
+    )
     if not args.skip_runners:
         create_runners(flutter)
 

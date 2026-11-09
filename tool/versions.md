@@ -23,3 +23,12 @@ macOS 受控端验证环境（2026-11-07）：
 - uv `0.13.7`；Python `3.15.2`（脚本仍声明兼容 Python 3.12）
 
 已验证 Debug/Release `.app` 构建；桌面桥接/状态页、核心模型、Windows 映射共 9 项测试及 Android 启动测试通过。静态检查无 error/warning，存在历史 info lint。Python 编译与四种宿主/目标脚本路径校验通过；本机未安装 protoc，未执行完整 bootstrap/proto 重生成流程。辅助功能授权、Android→Mac 输入、签名公证和多屏体验待真机验收。
+
+iOS 控制端验证环境（2026-11-09）：
+
+- Flutter `3.47.9`、Dart `3.13.7`
+- Xcode `27.2`（27B52）、CocoaPods `1.17.0`
+- iOS deployment target：`15.0`
+- macOS `27.0.1`（26A434），Apple Silicon
+
+已验证未签名 iPhoneOS Debug `.app` 构建；iOS 真机签名、权限、局域网连接、设备端中文语音和完整交互仍待验收。

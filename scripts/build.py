@@ -1,4 +1,4 @@
-"""Build Android and Windows/macOS/Linux release artifacts with one cross-platform CLI."""
+"""Build mobile and desktop artifacts with one cross-platform CLI."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "target",
-        choices=("android", "windows", "macos", "linux", "all"),
+        choices=("android", "ios", "windows", "macos", "linux", "all"),
         help="Application target to build.",
     )
     parser.add_argument(
@@ -37,6 +37,11 @@ def parse_args() -> argparse.Namespace:
         "--android-format",
         choices=("apk", "appbundle"),
         default="apk",
+    )
+    parser.add_argument(
+        "--ios-codesign",
+        action="store_true",
+        help="Allow Xcode to sign the iOS app; the default build is unsigned.",
     )
     parser.add_argument(
         "--skip-pub-get",
@@ -58,6 +63,8 @@ def main() -> None:
         raise SystemExit("The Windows Flutter target must be built on Windows.")
     if args.target == "macos" and sys.platform != "darwin":
         raise SystemExit("The macOS Flutter target must be built on macOS.")
+    if args.target == "ios" and sys.platform != "darwin":
+        raise SystemExit("The iOS Flutter target must be built on macOS.")
     if args.target == "linux" and not sys.platform.startswith("linux"):
         raise SystemExit("The Linux Flutter target must be built on Linux.")
     if args.target == "all" and sys.platform not in ("darwin", "win32", "linux"):
@@ -88,6 +95,16 @@ def main() -> None:
             command,
             cwd=ROOT / "apps" / "mobile_app",
         )
+    if args.target == "ios" or (args.target == "all" and sys.platform == "darwin"):
+        command = [flutter]
+        if args.verbose:
+            command.append("--verbose")
+        command.extend(["build", "ios", f"--{args.mode}"])
+        if not args.ios_codesign:
+            command.append("--no-codesign")
+        if args.skip_pub_get:
+            command.append("--no-pub")
+        run(command, cwd=ROOT / "apps" / "mobile_app")
     if args.target in ("windows", "macos", "linux", "all"):
         target = desktop_target if args.target == "all" else args.target
         command = [flutter]

@@ -6,15 +6,15 @@ import '../infrastructure/remote_input_gateway.dart';
 import '../infrastructure/funasr_service.dart';
 
 final class KeyboardController extends ChangeNotifier {
-  KeyboardController(this._gateway, {FunAsrService? asr})
-    : _asr = asr ?? FunAsrService(),
+  KeyboardController(this._gateway, {LocalSpeechService? speech})
+    : _speech = speech ?? LocalSpeechService(),
       _connectionStatus = _gateway.status {
     Standard64Layout.validate();
     _gateway.statusChanges.addListener(_syncConnectionStatus);
   }
 
   final RemoteInputGateway _gateway;
-  final FunAsrService _asr;
+  final LocalSpeechService _speech;
   ModifierSet _modifiers = const ModifierSet.empty();
   ConnectionStatus _connectionStatus;
   VoiceInputState _voiceState = const VoiceInputState.ready();
@@ -73,7 +73,7 @@ final class KeyboardController extends ChangeNotifier {
 
   Future<void> startVoiceRecording(String operationId) async {
     try {
-      await _asr.startRecording();
+      await _speech.startRecording();
       _voiceState = VoiceInputState(
         VoiceInputPhase.recording,
         operationId: operationId,
@@ -98,7 +98,7 @@ final class KeyboardController extends ChangeNotifier {
     );
     notifyListeners();
     try {
-      final text = await _asr.stopAndRecognize();
+      final text = await _speech.stopAndRecognize();
       _voiceState = VoiceInputState(
         VoiceInputPhase.reviewing,
         operationId: operationId,
@@ -116,7 +116,7 @@ final class KeyboardController extends ChangeNotifier {
   }
 
   Future<void> cancelVoiceRecording() async {
-    await _asr.cancel();
+    await _speech.cancel();
     _voiceState = const VoiceInputState.ready();
     notifyListeners();
   }
@@ -173,7 +173,7 @@ final class KeyboardController extends ChangeNotifier {
   void dispose() {
     _gateway.statusChanges.removeListener(_syncConnectionStatus);
     _gateway.disconnect();
-    _asr.dispose();
+    _speech.dispose();
     super.dispose();
   }
 }
