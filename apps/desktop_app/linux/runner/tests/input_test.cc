@@ -1,5 +1,6 @@
 // Built and run in an isolated Xvfb session by scripts/test_linux_input.py.
 #include "../linux_input.cc"
+#include "../linux_key_map.h"
 #include <cassert>
 #include <iostream>
 
@@ -16,6 +17,7 @@ int main(int argc, char** argv) {
   g_autoptr(FlValue) args = fl_value_new_map();
   // Check all shared semantic keys against the native map and Xvfb keymap.
   for (int i = 1; i < argc; ++i) {
+    assert(linux_key_code(argv[i]) > 0);
     assert(keysym(argv[i]) != NoSymbol);
     assert(XKeysymToKeycode(d, keysym(argv[i])) != 0);
   }

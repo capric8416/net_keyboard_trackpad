@@ -1,8 +1,8 @@
 # 网络键鼠控制端与受控端实施规划
 
-> 文档状态：实现中；macOS 与 Linux X11 受控端已接入，真机验收待完成
+> 文档状态：实现中；macOS、Linux X11 与 Wayland portal 受控端已接入，真机验收待完成
 > 控制端：当前支持 Android，计划扩展 iOS
-> 受控端：当前支持 Windows、macOS、Linux（X11）
+> 受控端：当前支持 Windows、macOS、Linux（X11 / Wayland portal）
 > 实施原则：产品、协议和通用流程使用角色名称；系统名称只用于平台实现、构建和限制说明。
 
 ## 1. 产品目标
@@ -47,7 +47,7 @@
 
 ### 2.2 v1 明确不做
 
-- iOS、Linux Wayland 的可运行产物。
+- iOS、缺少 RemoteDesktop portal 的 Wayland 桌面产物。
 - 系统输入法（IME）或悬浮键盘；控制端是独立前台应用。
 - Windows 登录界面、锁屏、UAC 安全桌面中的输入。
 - 对管理员权限应用的默认输入保证。
@@ -62,7 +62,7 @@
 ### 2.3 后续扩展方向
 
 - 控制端的 `mobile_app` 增加 iOS runner，复用 UI、连接、协议和语音抽象层；另行提供 iOS 可用的本地语音识别原生构建。
-- Linux Wayland 输入后端；当前 Linux runner 已实现 X11/XTEST、托盘及 Secret Service 凭据存储。
+- 其他 Linux 桌面后端；当前已实现 X11/XTEST、Wayland RemoteDesktop portal、托盘及 Secret Service 凭据存储。
 - 受控端输入能力通过平台接口扩展，协议中的语义键码保持不变。
 - 多设备配对与控制权租约、鼠标/触控板、服务发现可作为独立版本演进，不影响 v1 的键盘消息。
 
@@ -928,6 +928,19 @@ Exit Criteria：干净的控制端与受控端设备可按文档安装并完成�
 - [x] 隔离 Xvfb 原生回归：76 键映射、8 修饰键、组合键顺序、Unicode 双 selection、鼠标/滚轮、Wayland 与无焦点拒绝；现有 10 项 Flutter 回归通过。
 - [ ] openSUSE Leap 16.1 X11 真机：配对、编辑器/浏览器/终端输入、权限/凭据服务失败、托盘与重复启动、重连、退出。
 
-Wayland/XWayland 会话明确返回 INPUT_BLOCKED；不保证锁屏和登录界面。文本粘贴沿用控制端明确确认流程。ACK 仅表示 XTEST 事件提交，不保证目标应用消费；小额滚轮增量在原生端累计，未满一格时可返回零事件成功。
+X11 后端不用于 Wayland/XWayland 会话；Wayland 使用下节的 portal 授权后端。不保证锁屏和登录界面。文本粘贴沿用控制端明确确认流程。ACK 仅表示 XTEST 事件提交，不保证目标应用消费；小额滚轮增量在原生端累计，未满一格时可返回零事件成功。
 
 Linux Release 已成功构建，产物仅打包到项目内 bundle；窗口和任务栏图标通过 GResource 嵌入，Linux 退出流程避免提前销毁 Flutter 隐式视图。原生 runner/输入桥编译检查、修改的 Dart 文件静态分析及 Python 语法检查通过。用户已确认 Android 可以连接 Linux；完整输入与生命周期真机验收仍待完成。全仓库 analyze 仍有既有 lint 与 Android 模型 assets 缺失告警。
+
+## 22. Wayland portal 受控端实现与验收
+
+- [x] 自动识别 Wayland（含 XWayland UI），使用 RemoteDesktop portal 的异步 CreateSession → SelectDevices → RequestClipboard（可选）→ Start 授权流程；不请求屏幕画面。
+- [x] 状态页显式授权/重新授权/停止控制，监听独立于输入授权；取消、拒绝、部分设备授权、超时、Session Closed 和服务退出可恢复，不自动重放旧输入。
+- [x] 76 个语义键映射 evdev 位置；8 个左右修饰键按位按下、主键按下/抬起、逆序释放；事件失败时尝试剩余释放并关闭会话。
+- [x] 相对光标、三键、双轴滚动，通过异步 Notify 方法提交，不建立 EIS 连接。
+- [x] 授权后的 Clipboard portal 提供确认文本，异步 Unix FD 传输；支持 Ctrl+V 和终端 Ctrl+Shift+V。不读取现有剪贴板；缺少 clipboard 权限时文本明确失败，键盘和鼠标仍可用。
+- [x] 独立 D-Bus 模拟 portal 覆盖授权取消/重试、部分授权、撤销、组合键顺序、鼠标、滚动、中文 FD 传输和失败释放；Xvfb X11 回归通过。
+- [x] Flutter 授权状态/重试/终端模式及现有回归共 13 项通过，修改文件静态分析通过，Linux Release 构建通过。
+- [ ] openSUSE Leap 16.1 / KDE Plasma 6 Wayland 真机：系统授权对话框、原生 Wayland 与 XWayland 应用、左右修饰键、中文/emoji、多行终端粘贴、撤销后重新授权、重连、退出。
+
+运行时需要 xdg-desktop-portal 和桌面 RemoteDesktop 后端；目标环境已安装 xdg-desktop-portal-kde6。Wayland 文本依赖 Clipboard portal，替换 CLIPBOARD，不修改 PRIMARY；默认不持久化授权。ACK 只表示 portal 事件提交，不代表目标应用消费。Windows/macOS 原生输入后端保持不变。

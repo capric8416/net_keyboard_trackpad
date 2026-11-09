@@ -23,15 +23,26 @@ def main() -> None:
     source = (ROOT / "packages/remote_input_core/lib/src/semantic_key.dart").read_text()
     names = re.findall(r"^  (\w+),$", source.split("enum SemanticKey {", 1)[1].split("}", 1)[0], re.M)
     flags = shlex.split(subprocess.check_output(
-        ["pkg-config", "--cflags", "--libs", "gtk+-3.0", "x11", "xtst"], text=True))
+        ["pkg-config", "--cflags", "--libs", "gtk+-3.0", "x11", "xtst", "gio-unix-2.0"], text=True))
     with tempfile.TemporaryDirectory(prefix="linux-input-test-") as directory:
         binary = str(Path(directory) / "input_test")
         subprocess.run([
             "clang++", "-std=c++14", "-Wall", "-Werror",
             str(ROOT / "apps/desktop_app/linux/runner/tests/input_test.cc"),
+            str(ROOT / "apps/desktop_app/linux/runner/wayland_input.cc"),
             f"-I{engine}", f"-L{engine}", f"-Wl,-rpath,{engine}",
             "-lflutter_linux_gtk", *flags, "-o", binary,
         ], check=True)
+        portal_binary = str(Path(directory) / "wayland_portal_test")
+        subprocess.run([
+            "clang++", "-std=c++14", "-Wall", "-Werror",
+            str(ROOT / "apps/desktop_app/linux/runner/tests/wayland_portal_test.cc"),
+            f"-I{engine}", f"-L{engine}", f"-Wl,-rpath,{engine}",
+            "-lflutter_linux_gtk", *flags, "-o", portal_binary,
+        ], check=True)
+        subprocess.run(["dbus-run-session", "--", portal_binary],
+                       env=dict(os.environ, NET_KEYBOARD_PORTAL_TEST="1"),
+                       check=True, timeout=45)
         # Let Xvfb allocate a free display; no interaction with the user's desktop.
         with tempfile.TemporaryFile() as display_file:
             server = subprocess.Popen([

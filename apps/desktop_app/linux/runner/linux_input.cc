@@ -1,4 +1,5 @@
 #include "linux_input.h"
+#include "wayland_input.h"
 #include <gdk/gdkx.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
@@ -62,6 +63,15 @@ FlMethodResponse* execute(const std::string& method, FlValue* args) {
       XTestQueryExtension(display, &event, &error, &major, &minor);
   if (method == "isAvailable") {
     g_autoptr(FlValue) result = fl_value_new_bool(available);
+    return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+  }
+  if (method == "inputStatus" || method == "requestAccess" || method == "releaseAccess") {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "backend", fl_value_new_string("x11"));
+    fl_value_set_string_take(result, "ready", fl_value_new_bool(available));
+    fl_value_set_string_take(result, "busy", fl_value_new_bool(false));
+    fl_value_set_string_take(result, "message", fl_value_new_string(
+        available ? "X11 / XTEST 输入可用" : "X11 / XTEST 不可用"));
     return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
   }
   if (!available) {
@@ -150,6 +160,10 @@ FlMethodResponse* execute(const std::string& method, FlValue* args) {
   return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
 }
 void handle(FlMethodChannel*, FlMethodCall* call, gpointer) {
+  if (is_wayland_session()) {
+    handle_wayland_input(call);
+    return;
+  }
   g_autoptr(FlMethodResponse) response = execute(
       fl_method_call_get_name(call), fl_method_call_get_args(call));
   fl_method_call_respond(call, response, nullptr);

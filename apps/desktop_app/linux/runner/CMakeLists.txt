@@ -26,6 +26,7 @@ add_executable(${BINARY_NAME}
   "main.cc"
   "my_application.cc"
   "linux_input.cc"
+  "wayland_input.cc"
   "${APP_RESOURCES}"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
 )
@@ -39,6 +40,8 @@ add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")
 
 # Add dependency libraries. Add any application-specific dependencies here.
 pkg_check_modules(XINPUT REQUIRED IMPORTED_TARGET x11 xtst)
+pkg_check_modules(GIO_UNIX REQUIRED IMPORTED_TARGET gio-unix-2.0)
+target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::GIO_UNIX)
 target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::XINPUT)
 target_link_libraries(${BINARY_NAME} PRIVATE flutter)
 target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::GTK)

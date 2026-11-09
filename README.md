@@ -2,14 +2,14 @@
 
 局域网远程输入工具，由“网络键鼠控制端”和“网络键鼠受控端”组成。控制端提供触控键盘、语音输入和触控板，并通过 gRPC 将输入发送到受控端；受控端常驻后台，将命令注入当前激活窗口。
 
-当前控制端支持 Android，计划扩展 iOS；当前受控端支持 Windows、macOS 和 Linux（X11）。产品范围、协议、安全约束和完整任务列表见 [`plan.md`](plan.md)。平台无关流程包含 TLS gRPC、TOTP 首次配对、控制会话、64 键键盘、右侧多点触控板、FunASR 录音/FFI 和语音结果确认；输入注入由各受控平台分别实现。
+当前控制端支持 Android，计划扩展 iOS；当前受控端支持 Windows、macOS 和 Linux（X11 / Wayland portal）。产品范围、协议、安全约束和完整任务列表见 [`plan.md`](plan.md)。平台无关流程包含 TLS gRPC、TOTP 首次配对、控制会话、64 键键盘、右侧多点触控板、FunASR 录音/FFI 和语音结果确认；输入注入由各受控平台分别实现。
 
 ## 角色与平台
 
 | 产品角色 | 当前平台 | 计划平台 | 仓库应用 |
 | --- | --- | --- | --- |
 | 网络键鼠控制端 | Android | iOS | `apps/mobile_app` |
-| 网络键鼠受控端 | Windows、macOS、Linux（X11） | Wayland | `apps/desktop_app` |
+| 网络键鼠受控端 | Windows、macOS、Linux（X11 / Wayland portal） | 其他桌面后端 | `apps/desktop_app` |
 
 通用产品说明、界面和协议展示名只使用“控制端”和“受控端”。系统名称仅用于构建步骤、平台实现及操作系统限制。
 
@@ -272,14 +272,14 @@ macOS 使用 Core Graphics 注入事件，凭据保存在 macOS Keychain（不�
 
 手工验收：控制端配对 macOS 受控端，在 TextEdit、浏览器输入框与 Terminal 中检查普通键、左右修饰键、Command+C/V、中文/emoji、单击/双击/右键、双轴滚动；撤销辅助功能权限后确认命令失败，再授权恢复；关闭窗口、重复启动、断网重连和退出后端口释放也需验收。
 
-## 在 Linux（openSUSE Leap，X11）构建受控端
+## 在 Linux（openSUSE Leap，X11 / Wayland）构建受控端
 
-Linux runner 使用 GTK 3、X11/XTEST；只支持当前用户的 X11 图形会话。通过 `echo $XDG_SESSION_TYPE` 确认为 `x11`。Wayland（含 XWayland）不支持，请从登录界面选择 X11 会话。
+Linux runner 使用 GTK 3；X11 通过 XTEST 注入，Wayland 通过桌面 RemoteDesktop portal 授权后注入（目标为 KDE Plasma 6 / KWin）。使用 `echo $XDG_SESSION_TYPE` 确认当前会话。即使应用界面运行在 XWayland，Wayland 会话也使用 portal，不会退回只能控制部分应用的 XTEST。
 
 openSUSE Leap 16.1 构建依赖（需要已启用仓库提供这些包）：
 
 ```text
-sudo zypper install clang cmake ninja pkg-config gtk3-devel libstdc++-devel libX11-devel libXtst-devel libsecret-devel libappindicator3-devel
+sudo zypper install clang cmake ninja pkg-config gtk3-devel glib2-devel libstdc++-devel libX11-devel libXtst-devel libsecret-devel libappindicator3-devel
 flutter doctor -v
 uv run python scripts/bootstrap.py --skip-doctor
 uv run python scripts/build.py linux --mode release
@@ -295,9 +295,35 @@ apps/desktop_app/build/linux/x64/release/bundle/net_keyboard_desktop
 
 本地调试在 `apps/desktop_app` 执行 `flutter run -d linux`。启动后通过托盘打开状态窗口，关闭窗口继续监听，再次运行会打开已有实例；桌面面板需支持 AppIndicator/System Tray。托盘初始化失败时保留可见窗口。需要开机启动时可在桌面“自动启动”设置中添加 bundle 中可执行文件的绝对路径。
 
-键盘支持左右 Ctrl/Alt/Shift/Super（Meta）、F1–F12、导航键、Print Screen 和 Menu；普通键按当前 X11 键盘映射解析。触控板支持相对移动、三键及双轴滚动（累计每 120 协议单位发送一格）。Unicode 文本（中文、emoji 等）写入系统剪贴板后用 Shift+Insert 粘贴，**会替换 CLIPBOARD 和 PRIMARY selection 内容**（兼容终端的 Shift+Insert）。目标应用需支持 Shift+Insert；终端可能弹出多行粘贴确认。ACK 表示事件已提交，不能确认目标应用是否消费。不要在确认语音文本与完成粘贴之间切换焦点。
+X11 键盘支持左右 Ctrl/Alt/Shift/Super（Meta）、F1–F12、导航键、Print Screen 和 Menu；普通键按当前 X11 键盘映射解析。触控板支持相对移动、三键及双轴滚动（累计每 120 协议单位发送一格）。Unicode 文本（中文、emoji 等）写入系统剪贴板后用 Shift+Insert 粘贴，**会替换 CLIPBOARD 和 PRIMARY selection 内容**（兼容终端的 Shift+Insert）。目标应用需支持 Shift+Insert；终端可能弹出多行粘贴确认。ACK 表示事件已提交，不能确认目标应用是否消费。不要在确认语音文本与完成粘贴之间切换焦点。
 
-在受信任局域网内按需放行 firewalld 的 TCP 39091（或配置端口），不要关闭整个防火墙。登录/锁屏、其他用户会话、Wayland、受保护窗口和游戏独占输入不在支持范围。
+### Wayland 授权和测试
+
+Wayland 需桌面提供 `org.freedesktop.portal.RemoteDesktop`；中文/emoji 粘贴还需 `org.freedesktop.portal.Clipboard`。openSUSE KDE 的运行时包名为 `xdg-desktop-portal` 和 `xdg-desktop-portal-kde6`，可先用以下命令检查（不需要 root 输入注入服务或额外 libei 开发包）：
+
+```text
+rpm -q xdg-desktop-portal xdg-desktop-portal-kde6
+systemctl --user status xdg-desktop-portal.service plasma-xdg-desktop-portal-kde.service
+```
+
+1. 退出旧受控端，注销后选择 Plasma Wayland 登录，再运行同一个 bundle；构建无需在 Wayland 会话下进行。
+2. 从托盘打开状态窗口，点击 Linux 输入状态旁的“授权 / 重新检查”，在系统对话框允许键盘、鼠标及剪贴板控制。不申请录屏或麦克风。
+3. 状态页显示“已授权”后，从 Android 按现有地址、39091 端口和配对流程连接；先在原生 Wayland 编辑器/浏览器中测试，再检查 XWayland 应用。
+4. 测试字母、数字、F1–F12、左右 Ctrl/Alt/Shift/Super、导航键，单击/双击/右键、相对移动和双轴滚动。普通键使用 evdev 物理位置，字符由当前桌面键盘布局决定。
+5. 确认语音文本后通过 Clipboard portal 粘贴中文、emoji 和多行文本。默认 Ctrl+V，向终端输入前在受控端状态页打开“语音文本粘贴到终端”（Ctrl+Shift+V）。此开关本次进程内生效。**会替换 CLIPBOARD，Wayland 不修改 PRIMARY**；目标需支持对应粘贴快捷键。目标不消费粘贴时 ACK 也可能成功；未授予 clipboard 时文本返回 INPUT_BLOCKED，键盘/鼠标仍可用。
+6. 点击“停止 Wayland 控制”，或从系统远程控制指示器撤销授权，验证 Android 输入失败；重新授权后再发送新输入。取消授权可重试；授权不会跨应用重启保存，不重放失败或未授权时的命令。
+
+网络监听和输入授权独立：未授权时仍可配对，但输入返回 INPUT_BLOCKED。桌面不支持 portal、服务中断、拒绝或撤销时，状态页给出原因；重新授权期间界面保持响应，授权请求 120 秒超时。锁屏、登录界面及其他用户会话不在支持范围。授权/键盘事件通过标准 RemoteDesktop Notify 方法发送，不建立 EIS 连接；Clipboard 内容仅在确认文本后提供，不读取或同步原有剪贴板。
+
+如果授权失败，收集状态页错误及 portal 日志：
+
+```text
+journalctl --user -b -u xdg-desktop-portal.service -u plasma-xdg-desktop-portal-kde.service --no-pager -n 100
+```
+
+实现参考：[RemoteDesktop portal](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.RemoteDesktop.html)、[Clipboard portal](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Clipboard.html)。当前自动回归使用隔离模拟 portal；KDE Wayland 真机输入和系统授权对话框仍需手工验收。
+
+在受信任局域网内按需放行 firewalld 的 TCP 39091（或配置端口），不要关闭整个防火墙。登录/锁屏、其他用户会话、缺少 RemoteDesktop portal 的 Wayland 桌面、受保护窗口和游戏独占输入不在支持范围。
 
 手工验收：从 Android 配对后，在文本编辑器、浏览器输入框和终端检查普通键、左右修饰键、Ctrl+C/V、中文/emoji、单击/双击/右键及横纵滚动；检查窗口关闭、重复启动、重连、退出释放端口和重启后凭据恢复。当前仓库中的自动检查不能替代 Leap 16.1 真机端到端验收。
 
@@ -399,7 +425,7 @@ remote_input_core validation passed: 64 unique keys
 Windows mapping validation passed: 76 keys, 8 modifiers
 ```
 
-Linux 原生输入回归（需 clang++、GTK/X11/XTEST 开发包和 Xvfb；隔离显示，不操作当前桌面）：
+Linux 原生输入回归（需 clang++、GTK/X11/XTEST/GIO 开发包、Xvfb 和 dbus-run-session；Wayland 使用隔离模拟 portal，X11 使用隔离显示，不操作当前桌面）：
 
 ```text
 uv run python scripts/test_linux_input.py

@@ -148,6 +148,51 @@ class _StatusPage extends StatelessWidget {
                 child: const Text('授权 / 重新检查'),
               ),
             ),
+          if (Platform.isLinux) ...[
+            ListTile(
+              leading: Icon(
+                controller.linuxInputStatus?.ready == true
+                    ? Icons.check_circle
+                    : Icons.security,
+              ),
+              title: Text(
+                controller.linuxInputStatus?.message ?? '正在检查 Linux 输入…',
+              ),
+              subtitle: const Text('Wayland 需要桌面远程控制授权；撤销后可重新授权。'),
+              trailing: TextButton(
+                onPressed:
+                    controller.linuxAuthorizationPending ||
+                        controller.linuxInputStatus?.busy == true
+                    ? null
+                    : () => controller.checkLinuxInput(
+                        request:
+                            controller.linuxInputStatus?.backend == 'wayland',
+                      ),
+                child: Text(
+                  controller.linuxAuthorizationPending ? '等待授权…' : '授权 / 重新检查',
+                ),
+              ),
+            ),
+            if (controller.linuxInputStatus?.backend == 'wayland') ...[
+              SwitchListTile(
+                title: const Text('语音文本粘贴到终端'),
+                subtitle: const Text(
+                  '开启：Ctrl+Shift+V；关闭：Ctrl+V（编辑器、浏览器）。会替换系统剪贴板。',
+                ),
+                value: controller.terminalPaste,
+                onChanged: controller.setTerminalPaste,
+              ),
+              if (controller.linuxInputStatus?.ready == true ||
+                  controller.linuxAuthorizationPending)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: controller.releaseLinuxInput,
+                    child: const Text('停止 Wayland 控制'),
+                  ),
+                ),
+            ],
+          ],
           const Divider(),
           Text('连接地址', style: Theme.of(context).textTheme.titleMedium),
           for (final address in controller.addresses)

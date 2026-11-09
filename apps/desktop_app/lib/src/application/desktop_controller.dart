@@ -22,6 +22,50 @@ final class ControlledDeviceController extends ChangeNotifier {
   String? _connectedDevice;
   Object? _error;
   List<NetworkInterface> _interfaces = const [];
+  Timer? _inputTimer;
+  LinuxInputStatus? linuxInputStatus;
+  bool linuxAuthorizationPending = false;
+  bool _checkingLinuxInput = false;
+  bool _disposed = false;
+
+  Future<void> checkLinuxInput({bool request = false}) async {
+    if (_disposed || !Platform.isLinux || (!request && _checkingLinuxInput)) {
+      return;
+    }
+    if (request && linuxAuthorizationPending) return;
+    _checkingLinuxInput = true;
+    if (request) {
+      linuxAuthorizationPending = true;
+      if (!_disposed) notifyListeners();
+    }
+    try {
+      linuxInputStatus = await LinuxInputInjector().status(request: request);
+    } catch (error) {
+      linuxInputStatus = LinuxInputStatus(
+        backend: 'unknown',
+        ready: false,
+        busy: false,
+        clipboard: false,
+        message: '无法检查 Linux 输入状态：$error',
+      );
+    } finally {
+      _checkingLinuxInput = false;
+      if (request) linuxAuthorizationPending = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  bool get terminalPaste => LinuxInputInjector.terminalPaste;
+  void setTerminalPaste(bool value) {
+    LinuxInputInjector.terminalPaste = value;
+    notifyListeners();
+  }
+
+  Future<void> releaseLinuxInput() async {
+    if (!Platform.isLinux) return;
+    await LinuxInputInjector().releaseAccess();
+    await checkLinuxInput();
+  }
 
   bool accessibilityTrusted = false;
   Future<void> checkAccessibility({bool prompt = false}) async {
@@ -48,8 +92,11 @@ final class ControlledDeviceController extends ChangeNotifier {
   Future<void> initialize() async {
     try {
       await checkAccessibility();
-      if (Platform.isLinux && !await LinuxInputInjector().isAvailable()) {
-        throw StateError('Linux 输入需要 X11 会话及 XTEST 扩展；不支持 Wayland。');
+      await checkLinuxInput();
+      if (Platform.isLinux) {
+        _inputTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+          if (!linuxAuthorizationPending) unawaited(checkLinuxInput());
+        });
       }
       final preferences = await SharedPreferences.getInstance();
       _port = preferences.getInt('listen_port') ?? 39091;
@@ -107,13 +154,17 @@ final class ControlledDeviceController extends ChangeNotifier {
 
   Future<void> shutdown() async {
     _codeTimer?.cancel();
+    _inputTimer?.cancel();
+    if (Platform.isLinux) await LinuxInputInjector().releaseAccess();
     await _server?.shutdown();
     _server = null;
   }
 
   @override
   void dispose() {
+    _disposed = true;
     _codeTimer?.cancel();
+    _inputTimer?.cancel();
     super.dispose();
   }
 }

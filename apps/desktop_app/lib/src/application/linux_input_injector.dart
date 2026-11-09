@@ -7,13 +7,29 @@ final class LinuxInputInjector implements ControlledDeviceInputInjector {
   Future<bool> isAvailable() async =>
       await channel.invokeMethod<bool>('isAvailable') ?? false;
 
+  Future<LinuxInputStatus> status({bool request = false}) async =>
+      LinuxInputStatus.fromMap(
+        (await channel.invokeMapMethod<String, Object?>(
+          request ? 'requestAccess' : 'inputStatus',
+        ))!,
+      );
+
+  Future<void> releaseAccess() async {
+    await channel.invokeMethod<Object?>('releaseAccess');
+  }
+
+  // Wayland Clipboard portal uses CLIPBOARD; terminal emulators commonly use
+  // Ctrl+Shift+V instead of Ctrl+V. Controlled by the desktop status page.
+  static bool terminalPaste = false;
+
   @override
   Future<int> injectKeyStroke(KeyStroke stroke) => _send('keyStroke', {
     'key': stroke.key.name,
     'modifiers': stroke.modifierBits,
   });
   @override
-  Future<int> injectText(String text) => _send('text', {'text': text});
+  Future<int> injectText(String text) =>
+      _send('text', {'text': text, 'terminalPaste': terminalPaste ? 1 : 0});
   @override
   Future<int> injectPointer({
     int deltaX = 0,
@@ -32,4 +48,29 @@ final class LinuxInputInjector implements ControlledDeviceInputInjector {
   });
   Future<int> _send(String method, Map<String, Object> args) async =>
       (await channel.invokeMethod<int>(method, args))!;
+}
+
+final class LinuxInputStatus {
+  const LinuxInputStatus({
+    required this.backend,
+    required this.ready,
+    required this.busy,
+    required this.clipboard,
+    required this.message,
+  });
+
+  factory LinuxInputStatus.fromMap(Map<String, Object?> map) =>
+      LinuxInputStatus(
+        backend: map['backend']! as String,
+        ready: map['ready']! as bool,
+        busy: map['busy']! as bool,
+        clipboard: map['clipboard'] as bool? ?? false,
+        message: map['message']! as String,
+      );
+
+  final String backend;
+  final bool ready;
+  final bool busy;
+  final bool clipboard;
+  final String message;
 }
