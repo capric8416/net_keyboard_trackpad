@@ -34,7 +34,9 @@ class _KeyboardKeyViewState extends State<KeyboardKeyView> {
             : key.modifier!,
       ),
       KeyKind.local => widget.controller.fnSelected,
-      KeyKind.remote => false,
+      KeyKind.remote =>
+        key.semanticKey == SemanticKey.capsLock &&
+        widget.controller.capsLockActive,
     };
   }
 

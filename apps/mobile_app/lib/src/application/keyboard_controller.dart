@@ -20,12 +20,14 @@ final class KeyboardController extends ChangeNotifier {
   VoiceInputState _voiceState = const VoiceInputState.ready();
   String? _lastError;
   bool _fnSelected = false;
+  bool _capsLockActive = false;
 
   ModifierSet get modifiers => _modifiers;
   ConnectionStatus get connectionStatus => _connectionStatus;
   VoiceInputState get voiceState => _voiceState;
   String? get lastError => _lastError;
   bool get fnSelected => _fnSelected;
+  bool get capsLockActive => _capsLockActive;
   bool get canSend => _connectionStatus.canSend;
 
   void updateConnectionStatus(ConnectionStatus status) {
@@ -43,12 +45,28 @@ final class KeyboardController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void toggleCapsLock() {
+    _capsLockActive = !_capsLockActive;
+    notifyListeners();
+  }
+
   Future<void> pressKey(SemanticKey key, {bool repeated = false}) async {
+    if (key == SemanticKey.capsLock) {
+      toggleCapsLock();
+      return;
+    }
     if (!canSend) {
       _setError(_connectionStatus.message ?? '尚未连接受控端');
       return;
     }
-    final stroke = KeyStroke(key: key, modifierBits: _modifiers.bits);
+    var modifierBits = _modifiers.bits;
+    if (_capsLockActive && _isLetter(key)) {
+      const shiftBits = ModifierKey.leftShift.bit | ModifierKey.rightShift.bit;
+      modifierBits = (modifierBits & shiftBits) == 0
+          ? modifierBits | ModifierKey.leftShift.bit
+          : modifierBits & ~shiftBits;
+    }
+    final stroke = KeyStroke(key: key, modifierBits: modifierBits);
     try {
       await _gateway.sendKeyStroke(stroke, repeated: repeated);
       _lastError = null;
@@ -56,6 +74,14 @@ final class KeyboardController extends ChangeNotifier {
       _setError(error.toString());
     }
   }
+
+  bool _isLetter(SemanticKey key) =>
+      (key.index >= SemanticKey.keyQ.index &&
+          key.index <= SemanticKey.keyP.index) ||
+      (key.index >= SemanticKey.keyA.index &&
+          key.index <= SemanticKey.keyL.index) ||
+      (key.index >= SemanticKey.keyZ.index &&
+          key.index <= SemanticKey.keyM.index);
 
   Future<void> sendPointer(protocol.PointerInput input) async {
     if (!canSend) return;
