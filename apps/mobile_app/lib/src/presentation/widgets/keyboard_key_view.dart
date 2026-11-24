@@ -113,11 +113,18 @@ class _KeyboardKeyViewState extends State<KeyboardKeyView> {
     final shiftActive =
         widget.controller.modifiers.contains(ModifierKey.leftShift) ||
         widget.controller.modifiers.contains(ModifierKey.rightShift);
-    final label = widget.controller.fnSelected && widget.keySpec.fnLabel != null
-        ? widget.keySpec.fnLabel!
-        : shiftActive && widget.keySpec.shiftLabel != null
-        ? widget.keySpec.shiftLabel!
-        : widget.keySpec.label;
+    final spec = widget.keySpec;
+    final isLetter = spec.semanticKey != null && _isLetter(spec.semanticKey!);
+    final capsActive = widget.controller.capsLockActive;
+    final label = widget.controller.fnSelected && spec.fnLabel != null
+        ? spec.fnLabel!
+        : isLetter
+        ? (capsActive != shiftActive
+              ? spec.label.toUpperCase()
+              : spec.label.toLowerCase())
+        : shiftActive && spec.shiftLabel != null
+        ? spec.shiftLabel!
+        : spec.label;
     final colors = Theme.of(context).colorScheme;
     final background = selected
         ? colors.primaryContainer
@@ -164,4 +171,12 @@ class _KeyboardKeyViewState extends State<KeyboardKeyView> {
       ),
     );
   }
+
+  bool _isLetter(SemanticKey key) =>
+      (key.index >= SemanticKey.keyQ.index &&
+          key.index <= SemanticKey.keyP.index) ||
+      (key.index >= SemanticKey.keyA.index &&
+          key.index <= SemanticKey.keyL.index) ||
+      (key.index >= SemanticKey.keyZ.index &&
+          key.index <= SemanticKey.keyM.index);
 }
