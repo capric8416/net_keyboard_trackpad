@@ -61,7 +61,7 @@ final class KeyboardController extends ChangeNotifier {
     }
     var modifierBits = _modifiers.bits;
     if (_capsLockActive && _isLetter(key)) {
-      const shiftBits = ModifierKey.leftShift.bit | ModifierKey.rightShift.bit;
+      final shiftBits = ModifierKey.leftShift.bit | ModifierKey.rightShift.bit;
       modifierBits = (modifierBits & shiftBits) == 0
           ? modifierBits | ModifierKey.leftShift.bit
           : modifierBits & ~shiftBits;

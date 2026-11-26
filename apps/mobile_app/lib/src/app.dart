@@ -6,7 +6,9 @@ import 'presentation/device_list_screen.dart';
 import 'presentation/keyboard_screen.dart';
 
 class NetworkInputControllerApp extends StatefulWidget {
-  const NetworkInputControllerApp({super.key});
+  const NetworkInputControllerApp({this.showKeyboardPreview = false, super.key});
+
+  final bool showKeyboardPreview;
 
   @override
   State<NetworkInputControllerApp> createState() =>
@@ -57,6 +59,11 @@ class _NetworkInputControllerAppState extends State<NetworkInputControllerApp> {
     ),
     home: _initializing
         ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+        : widget.showKeyboardPreview
+        ? KeyboardScreen(
+            controller: _controller,
+            onManageDevices: () => setState(() => _showDevices = true),
+          )
         : _showDevices || !_gateway.hasPairedProfile
         ? DeviceListScreen(
             gateway: _gateway,

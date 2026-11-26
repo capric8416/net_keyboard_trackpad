@@ -45,28 +45,48 @@ class KeyboardScreen extends StatelessWidget {
                     ),
                   const SizedBox(height: 6),
                   Expanded(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 7,
-                          child: Column(
-                            children: [
-                              for (final row in Standard64Layout.rows)
-                                Expanded(
-                                  child: _KeyboardRow(
-                                    keys: row,
-                                    controller: controller,
+                    child: OrientationBuilder(
+                      builder: (context, orientation) => Row(
+                        children: [
+                          Expanded(
+                            flex: 7,
+                            child: orientation == Orientation.landscape
+                                ? Column(
+                                    children: [
+                                      for (final row in Standard64Layout.rows)
+                                        Expanded(
+                                          child: _KeyboardRow(
+                                            keys: row,
+                                            controller: controller,
+                                          ),
+                                        ),
+                                    ],
+                                  )
+                                : Column(
+                                    children: [
+                                      Expanded(
+                                        child: _KeyboardHalf(
+                                          left: true,
+                                          controller: controller,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Expanded(
+                                        child: _KeyboardHalf(
+                                          left: false,
+                                          controller: controller,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                            ],
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 3,
-                          child: TrackpadView(controller: controller),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 3,
+                            child: TrackpadView(controller: controller),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -227,4 +247,68 @@ class _KeyboardRow extends StatelessWidget {
         ),
     ],
   );
+}
+
+class _KeyboardHalf extends StatelessWidget {
+  const _KeyboardHalf({required this.left, required this.controller});
+
+  final bool left;
+  final KeyboardController controller;
+
+  static const _leftIds = {
+    'escape', 'backquote', 'digit_1', 'digit_2', 'digit_3', 'digit_4',
+    'digit_5', 'digit_6', 'tab', 'key_q', 'key_w', 'key_e', 'key_r', 'key_t',
+    'caps_lock', 'key_a', 'key_s', 'key_d', 'key_f', 'key_g', 'left_shift',
+    'key_z', 'key_x', 'key_c', 'key_v', 'key_b', 'left_ctrl', 'left_meta',
+    'left_alt',
+  };
+
+  static const _rightIds = {
+    'digit_7', 'digit_8', 'digit_9', 'digit_0', 'minus', 'equal', 'backspace',
+    'key_y', 'key_u', 'key_i', 'key_o', 'key_p', 'bracket_left',
+    'bracket_right', 'backslash', 'key_h', 'key_j', 'key_k', 'key_l',
+    'semicolon', 'quote', 'enter', 'key_n', 'key_m', 'comma', 'period',
+    'slash', 'right_shift', 'arrow_up', 'right_alt', 'fn', 'arrow_left',
+    'arrow_down', 'arrow_right',
+  };
+
+  static const _leftSpace = KeyboardKeySpec.remote(
+    'left_space',
+    '',
+    SemanticKey.space,
+    width: 3.125,
+  );
+  static const _rightSpace = KeyboardKeySpec.remote(
+    'right_space',
+    '',
+    SemanticKey.space,
+    width: 3.125,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final keys = Standard64Layout.rows
+        .map(
+          (row) => row
+              .where((key) => (left ? _leftIds : _rightIds).contains(key.id))
+              .toList(),
+        )
+        .toList();
+    final space = left ? _leftSpace : _rightSpace;
+    if (left) {
+      keys[2].add(
+        Standard64Layout.keys.firstWhere((key) => key.id == 'enter'),
+      );
+      keys[4].add(space);
+    } else {
+      keys[4].insert(0, space);
+    }
+
+    return Column(
+      children: [
+        for (final row in keys)
+          Expanded(child: _KeyboardRow(keys: row, controller: controller)),
+      ],
+    );
+  }
 }

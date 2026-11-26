@@ -9,5 +9,9 @@ Future<void> main() async {
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
-  runApp(const NetworkInputControllerApp());
+  runApp(
+    const NetworkInputControllerApp(
+      showKeyboardPreview: bool.fromEnvironment('KEYBOARD_PREVIEW'),
+    ),
+  );
 }
